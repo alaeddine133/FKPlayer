@@ -260,4 +260,62 @@
             android:textColor="@color/muted"
             android:textSize="11sp" />
     </LinearLayout>
+
+    <!-- Direct : OK ouvre les bouquets et leurs chaînes sans quitter le plein écran -->
+    <LinearLayout
+        android:id="@+id/livePanel"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:background="@drawable/panel_bg"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:orientation="vertical"
+        android:paddingLeft="36dp"
+        android:paddingTop="26dp"
+        android:paddingRight="90dp"
+        android:paddingBottom="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/panelTitle"
+            style="@style/H1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:text="Bouquets"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            android:text="▲▼ choisir  ·  ◀▶ bouquets / chaînes  ·  OK regarder  ·  Retour fermer"
+            android:textColor="@color/muted"
+            android:textSize="11sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:orientation="horizontal">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/panelCats"
+                android:layout_width="230dp"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/panelChans"
+                android:layout_width="360dp"
+                android:layout_height="match_parent"
+                android:layout_marginLeft="14dp"
+                android:clipToPadding="false"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp" />
+        </LinearLayout>
+    </LinearLayout>
 </FrameLayout>

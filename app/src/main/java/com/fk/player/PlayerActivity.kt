@@ -20,15 +20,18 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
  * Lecteur plein écran.
- * Direct : haut/bas = zapper, chiffres = aller à une chaîne, OK = infos.
- * Films/séries : OK = pause, gauche/droite = -10 s / +10 s (maintenir = plus vite),
- *   ◀◀ ▶▶ = avance/retour rapide ×2 à ×32, bas = boutons à l'écran.
+ * Direct : haut/bas = zapper, chiffres = aller à une chaîne.
+ * Films/séries : OK = pause,
+ *   ◀▶ = curseur sur la barre (OK ou 2 s = lecture à cet endroit), ◀◀ ▶▶ = avance rapide ×2 à ×32, bas = boutons.
+ * Direct : OK = bouquets et chaînes sans quitter le plein écran.
  * Menu ou appui long sur OK = options (audio, sous-titres, format d'image, infos du flux).
  */
 @OptIn(UnstableApi::class)
@@ -85,6 +88,23 @@ class PlayerActivity : BaseActivity() {
         }
     }
 
+    /* Films/séries : ◀▶ déplacent un curseur sur la barre (l'image suit), OK ou 2 s sans toucher = lecture à cet endroit. */
+    private var scrubbing = false
+    private var scrubFrom = 0L
+    private val scrubApply = Runnable { endScrub(cancel = false) }
+
+    /* Direct : OK ouvre les bouquets et leurs chaînes sans quitter le plein écran. */
+    private lateinit var panel: View
+    private lateinit var pCats: RecyclerView
+    private lateinit var pChans: RecyclerView
+    private lateinit var pCatAd: Adapter<Category>
+    private lateinit var pChAd: Adapter<Item>
+    private var pCatList: List<Category> = emptyList()
+    private var pSel = 1
+    private var pPending: Runnable? = null
+    private val panelHide = Runnable { showPanel(false) }
+    private val panelOn get() = panel.visibility == View.VISIBLE
+
     /** Chien de garde : flux bloqué trop longtemps en chargement → on le relance. */
     private val watchdog = Runnable {
         if (player?.playbackState == Player.STATE_BUFFERING && Prefs.reconnect) { status("Flux bloqué, relance…", 2000); restart() }
@@ -113,6 +133,7 @@ class PlayerActivity : BaseActivity() {
         pv.resizeMode = FkPlayer.resizeMode()
 
         findViewById<View>(R.id.optionsBtn).setOnClickListener { options() }
+        setupPanel()
         controls = findViewById(R.id.controls)
         btns[0].setOnClickListener { scanBy(-1) }
         btns[1].setOnClickListener { seekBy(-10_000) }
@@ -139,6 +160,7 @@ class PlayerActivity : BaseActivity() {
         super.onStop()
         savePosition()
         ui.removeCallbacks(ticker); ui.removeCallbacks(watchdog); ui.removeCallbacks(scanTick); scan = 0
+        ui.removeCallbacks(scrubApply); scrubbing = false; ui.removeCallbacks(panelHide)
         player?.release(); player = null; pv.player = null
     }
 
@@ -174,8 +196,8 @@ class PlayerActivity : BaseActivity() {
         val logo = findViewById<ImageView>(R.id.logo)
         if (isLive && it.icon != null) logo.load(it.icon) else logo.setImageDrawable(null)
         findViewById<TextView>(R.id.hint).text = if (isLive)
-            "▲▼ zapper  ·  chiffres : n° de chaîne  ·  OK : infos  ·  Menu : options"
-        else "OK : pause  ·  ◀▶ -10 s / +10 s (maintenir = plus vite)  ·  ▼ boutons  ·  ◀◀ ▶▶ : avance rapide  ·  Menu : options"
+            "OK : bouquets et chaînes  ·  ▲▼ zapper  ·  chiffres : n° de chaîne  ·  Menu : options"
+        else "◀▶ avancer sur la barre (maintenir = plus vite), OK pour lire  ·  ▼ boutons  ·  ◀◀ ▶▶ avance rapide  ·  Menu : options"
         controls.visibility = if (isLive) View.GONE else View.VISIBLE
         if (isLive && controlsOn) focusControls(false)
         updatePlayBtn()
@@ -213,7 +235,7 @@ class PlayerActivity : BaseActivity() {
         } else {
             val d = p.duration
             if (d > 0 && d != C.TIME_UNSET) {
-                val pos = if (scan != 0) scanPos else p.currentPosition
+                val pos = if (scan != 0 || scrubbing) scanPos else p.currentPosition
                 bar.progress = ((pos * 1000) / d).toInt()
                 bar.secondaryProgress = ((p.bufferedPosition * 1000) / d).toInt()
                 findViewById<TextView>(R.id.tStart).text = duration(pos)
@@ -234,10 +256,12 @@ class PlayerActivity : BaseActivity() {
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
             // Pendant l'avance rapide, chaque saut recharge l'image : pas de rond de chargement, on garde « ×8 » affiché
-            spinner.visibility = if (state == Player.STATE_BUFFERING && scan == 0) View.VISIBLE else View.GONE
+            spinner.visibility = if (state == Player.STATE_BUFFERING && scan == 0 && !scrubbing) View.VISIBLE else View.GONE
+            // Curseur déplacé pendant que l'image chargeait : l'image rattrape le curseur
+            if (state == Player.STATE_READY && scrubbing && kotlin.math.abs((player?.currentPosition ?: 0) - scanPos) > 2000) player?.seekTo(scanPos)
             ui.removeCallbacks(watchdog)
             if (state == Player.STATE_BUFFERING && played) ui.postDelayed(watchdog, if (isLive) 15_000 else 30_000)
-            if (state == Player.STATE_READY) { retries = 0; played = true; if (scan == 0 && player?.playWhenReady == true) status.visibility = View.GONE; techInfo() }
+            if (state == Player.STATE_READY) { retries = 0; played = true; if (scan == 0 && !scrubbing && player?.playWhenReady == true) status.visibility = View.GONE; techInfo() }
             // Un flux direct ne « finit » jamais : si le serveur coupe, on relance
             if (state == Player.STATE_ENDED && isLive) {
                 if (retries < 12) { retries++; status("Reconnexion… ($retries)", 2000); ui.postDelayed({ restart() }, 800L * retries) }
@@ -330,6 +354,7 @@ class PlayerActivity : BaseActivity() {
 
     private fun togglePause() {
         val p = player ?: return
+        if (endScrub(cancel = false)) return
         if (stopScan()) return
         p.playWhenReady = !p.playWhenReady
         status(if (p.playWhenReady) "Lecture" else "Pause", 1200)
@@ -338,7 +363,141 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun updatePlayBtn() {
-        btns[2].text = if (scan != 0 || player?.playWhenReady == false) "▶  Lecture" else "❚❚  Pause"
+        btns[2].text = if (scan != 0 || scrubbing || player?.playWhenReady == false) "▶  Lecture" else "❚❚  Pause"
+    }
+
+    /** Déplace le curseur de la barre ; la lecture reprendra à cet endroit (OK, ou 2 s sans toucher). */
+    private fun scrubBy(ms: Long) {
+        val p = player ?: return
+        if (scan != 0) stopScan()
+        if (!scrubbing) {
+            scrubbing = true; scrubFrom = p.currentPosition; scanPos = scrubFrom
+            p.playWhenReady = false
+            p.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+        }
+        val d = p.duration
+        scanPos = (scanPos + ms).let { if (d > 0 && d != C.TIME_UNSET) it.coerceIn(0, (d - 1000).coerceAtLeast(0)) else it.coerceAtLeast(0) }
+        if (p.playbackState != Player.STATE_BUFFERING) p.seekTo(scanPos)
+        val diff = scanPos - scrubFrom
+        status("${duration(scanPos)}   (${if (diff >= 0) "+" else "−"}${duration(kotlin.math.abs(diff))})   ·   OK pour lire", 0)
+        updateProgress(); updatePlayBtn(); showOverlay(true)
+        ui.removeCallbacks(scrubApply); ui.postDelayed(scrubApply, 2000)
+    }
+
+    /** Fin du déplacement : lecture à l'endroit choisi (ou retour au départ si annulé). Renvoie false s'il n'y avait rien en cours. */
+    private fun endScrub(cancel: Boolean): Boolean {
+        if (!scrubbing) return false
+        scrubbing = false; ui.removeCallbacks(scrubApply)
+        val p = player ?: return true
+        p.setSeekParameters(androidx.media3.exoplayer.SeekParameters.DEFAULT)
+        val to = if (cancel) scrubFrom else scanPos
+        p.seekTo(to); p.playWhenReady = true
+        status(if (cancel) "Annulé" else "Lecture à ${duration(to)}", 1200)
+        updatePlayBtn(); showOverlay(true)
+        return true
+    }
+
+    /* ---------- Bouquets (direct) ---------- */
+
+    private fun chansOf(c: Category): List<Item> = when (c.id) {
+        LiveActivity.FAV -> Prefs.favs().mapNotNull { Repo.byKey(it) }.filter { it.type == Type.LIVE }.sortedBy { it.num }
+        LiveActivity.ALL -> Repo.live
+        else -> Repo.liveByCat[c.id] ?: emptyList()
+    }
+
+    private fun setupPanel() {
+        panel = findViewById(R.id.livePanel)
+        pCats = findViewById<RecyclerView>(R.id.panelCats).fast(); pChans = findViewById<RecyclerView>(R.id.panelChans).fast()
+        pCats.layoutManager = LinearLayoutManager(this); pChans.layoutManager = LinearLayoutManager(this)
+        pCatAd = Adapter(R.layout.item_cat, 1.03f) { v, c, i ->
+            v.isActivated = i == pSel
+            v.findViewById<TextView>(R.id.name).text = c.name
+            v.findViewById<TextView>(R.id.count).text = chansOf(c).size.toString()
+        }
+        // Se déplacer sur un bouquet affiche ses chaînes
+        pCatAd.onFocus = { _, i ->
+            pPending?.let { ui.removeCallbacks(it) }
+            pPending = Runnable { selectPanelCat(i) }.also { ui.postDelayed(it, 250) }
+        }
+        pCatAd.onClick = { _, i -> selectPanelCat(i); focusFirstChan() }
+        pCats.adapter = pCatAd
+        pChAd = Adapter(R.layout.item_channel, 1.02f) { v, c, _ ->
+            v.isActivated = c.id == cur.id
+            v.findViewById<TextView>(R.id.num).text = if (c.num > 0) c.num.toString() else ""
+            v.findViewById<TextView>(R.id.name).text = c.name
+            v.findViewById<TextView>(R.id.ini).text = initials(c.name)
+            val logo = v.findViewById<ImageView>(R.id.logo)
+            if (c.icon != null) logo.load(c.icon) { listener(onError = { _, _ -> logo.setImageDrawable(null) }) } else logo.setImageDrawable(null)
+            v.findViewById<View>(R.id.fav).visibility = if (Prefs.isFav(c.key)) View.VISIBLE else View.GONE
+            v.findViewById<TextView>(R.id.now).text = Repo.cachedEpg(c)?.firstOrNull()?.title ?: ""
+        }
+        pChAd.onClick = { _, i ->
+            // On regarde la chaîne ; ▲▼ zapperont ensuite dans ce bouquet
+            items = pChAd.items; index = i
+            Prefs.lastLiveCat = pCatList.getOrNull(pSel)?.id ?: ""
+            showPanel(false); load(resume = false)
+        }
+        pChAd.onLong = { c, _ -> toggleFav(c) { pChAd.notifyDataSetChanged(); pCatAd.notifyItemChanged(0) } }
+        pChans.adapter = pChAd
+    }
+
+    private fun showPanel(show: Boolean) {
+        ui.removeCallbacks(panelHide)
+        if (!show) {
+            if (!panelOn) return
+            panel.animate().alpha(0f).translationX(-dp(40).toFloat()).setDuration(180).withEndAction { panel.visibility = View.GONE }.start()
+            pv.requestFocus()
+            return
+        }
+        if (pCatList.isEmpty()) pCatList = listOf(Category(LiveActivity.FAV, "Favoris"), Category(LiveActivity.ALL, "Toutes les chaînes")) + Repo.liveCats
+        // On ouvre sur le bouquet de la chaîne en cours
+        pSel = pCatList.indexOfFirst { it.id == Prefs.lastLiveCat && chansOf(it).any { c -> c.id == cur.id } }.takeIf { it >= 0 } ?: 1
+        pCatAd.items = pCatList
+        pChAd.items = chansOf(pCatList[pSel])
+        showOverlay(false)
+        panel.visibility = View.VISIBLE; panel.alpha = 0f; panel.translationX = -dp(40).toFloat()
+        panel.animate().alpha(1f).translationX(0f).setDuration(200).start()
+        val idx = pChAd.items.indexOfFirst { it.id == cur.id }.coerceAtLeast(0)
+        (pChans.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(idx, dp(120))
+        pCats.scrollToPosition(pSel)
+        // Les listes viennent d'être remplies : focus sur la chaîne en cours une fois qu'elles sont dessinées
+        focusWhenReady(pChans) { (pChans.layoutManager as LinearLayoutManager).findViewByPosition(idx) ?: pChans.getChildAt(0) }
+        ui.postDelayed(panelHide, 30_000)
+    }
+
+    /** Place le focus dès que la liste est dessinée (les box lentes mettent parfois plus d'une seconde). */
+    private fun focusWhenReady(rv: RecyclerView, tries: Int = 30, pick: () -> View?) {
+        // Une liste en train de se redessiner perdrait aussitôt le focus : on attend qu'elle soit stable
+        val v = if (rv.isLayoutRequested || rv.hasPendingAdapterUpdates()) null else pick()
+        if (v != null && v.requestFocus()) return
+        if (tries > 0 && panelOn) ui.postDelayed({ focusWhenReady(rv, tries - 1, pick) }, 100)
+    }
+
+    private fun focusChan(pos: Int) {
+        val lm = pChans.layoutManager as LinearLayoutManager
+        lm.findViewByPosition(pos)?.let { if (it.requestFocus()) return }
+        if (lm.findViewByPosition(pos) == null) lm.scrollToPositionWithOffset(pos, dp(120))
+        focusWhenReady(pChans) { lm.findViewByPosition(pos) ?: pChans.getChildAt(0) }
+    }
+
+    private fun focusCat() {
+        val lm = pCats.layoutManager as LinearLayoutManager
+        lm.findViewByPosition(pSel)?.let { if (it.requestFocus()) return }
+        pCats.scrollToPosition(pSel)
+        focusWhenReady(pCats) { lm.findViewByPosition(pSel) }
+    }
+
+    private fun selectPanelCat(i: Int) {
+        if (i == pSel) return
+        val old = pSel; pSel = i
+        pCatAd.notifyItemChanged(old); pCatAd.notifyItemChanged(i)
+        pChAd.items = chansOf(pCatList[i])
+        pChans.scrollToPosition(0)
+    }
+
+    private fun focusFirstChan() {
+        val lm = pChans.layoutManager as LinearLayoutManager
+        focusWhenReady(pChans) { lm.findViewByPosition(lm.findFirstCompletelyVisibleItemPosition().coerceAtLeast(0)) ?: pChans.getChildAt(0) }
     }
 
     /** Boutons à l'écran : ▼ les active, ▲ ou Retour les quitte. */
@@ -384,7 +543,7 @@ class PlayerActivity : BaseActivity() {
 
     private fun seekBy(ms: Long) {
         val p = player ?: return
-        stopScan()
+        stopScan(); endScrub(cancel = false)
         val d = p.duration
         var t = p.currentPosition + ms
         if (d > 0 && d != C.TIME_UNSET) t = t.coerceIn(0, d - 1000)
@@ -408,6 +567,24 @@ class PlayerActivity : BaseActivity() {
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         val code = e.keyCode
+        // Panneau des bouquets ouvert : les flèches et OK servent à choisir ; Retour le ferme
+        if (panelOn) {
+            ui.removeCallbacks(panelHide); ui.postDelayed(panelHide, 30_000)
+            val inLists = pCats.hasFocus() || pChans.hasFocus()
+            if (e.action == KeyEvent.ACTION_DOWN) when (code) {
+                KeyEvent.KEYCODE_BACK -> { showPanel(false); return true }
+                // Le focus s'est échappé des listes : la touche le remet sur la chaîne en cours
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
+                    if (!inLists) { focusChan(pChAd.items.indexOfFirst { it.id == cur.id }.coerceAtLeast(0)); return true }
+                // Retour au bouquet affiché (et non à celui qui se trouve à la même hauteur)
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (!pCats.hasFocus()) { focusCat(); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (!pChans.hasFocus()) { focusFirstChan(); return true }
+            }
+            // OK relâché alors que le focus était hors des listes : rien d'autre à faire
+            if (!inLists && (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER)) return true
+            if (code == KeyEvent.KEYCODE_BACK) return true
+            return super.dispatchKeyEvent(e)
+        }
         // Boutons à l'écran actifs : les flèches et OK servent à choisir / valider un bouton
         if (controlsOn) {
             when (code) {
@@ -427,7 +604,7 @@ class PlayerActivity : BaseActivity() {
                 return true
             }
             if (e.action == KeyEvent.ACTION_UP) {
-                if (!longHandled) { if (isLive) showOverlay(top.visibility != View.VISIBLE) else togglePause() }
+                if (!longHandled) { if (isLive) showPanel(true) else togglePause() }
                 return true
             }
         }
@@ -438,8 +615,8 @@ class PlayerActivity : BaseActivity() {
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN ->
                 { if (isLive) zapBy(1) else focusControls(true); return true }
             // Flèches : -10 s / +10 s ; maintenues, les sauts grandissent (30 s, 1 min, 2 min)
-            KeyEvent.KEYCODE_DPAD_LEFT -> { if (!isLive) seekBy(-step(e)) else showOverlay(true); return true }
-            KeyEvent.KEYCODE_DPAD_RIGHT -> { if (!isLive) seekBy(step(e)) else showOverlay(true); return true }
+            KeyEvent.KEYCODE_DPAD_LEFT -> { if (!isLive) scrubBy(-step(e)) else showPanel(true); return true }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> { if (!isLive) scrubBy(step(e)) else showOverlay(true); return true }
             // Touches ◀◀ ▶▶ de la télécommande : avance / retour rapide
             KeyEvent.KEYCODE_MEDIA_REWIND -> { if (e.repeatCount == 0) scanBy(-1); return true }
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { if (e.repeatCount == 0) scanBy(1); return true }
@@ -449,6 +626,7 @@ class PlayerActivity : BaseActivity() {
             KeyEvent.KEYCODE_MEDIA_NEXT -> { if (isLive) zapBy(1) else if (index + 1 < items.size) { savePosition(); index++; load(true) }; return true }
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { if (isLive) zapBy(-1) else if (index > 0) { savePosition(); index--; load(true) }; return true }
             KeyEvent.KEYCODE_BACK -> {
+                if (endScrub(cancel = true)) return true
                 if (top.visibility == View.VISIBLE && player?.isPlaying == true) { showOverlay(false); return true }
             }
         }
@@ -462,7 +640,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun step(e: KeyEvent): Long = when {
-        e.repeatCount > 30 -> 120_000; e.repeatCount > 15 -> 60_000; e.repeatCount > 4 -> 30_000; else -> 10_000
+        e.repeatCount > 40 -> 120_000; e.repeatCount > 20 -> 60_000; e.repeatCount > 6 -> 30_000; else -> 10_000
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
