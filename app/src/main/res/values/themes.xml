@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FK" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="colorPrimary">@color/violet</item>
+        <item name="colorPrimaryDark">@color/bg</item>
+        <item name="colorAccent">@color/cyan</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text2</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="alertDialogTheme">@style/FkDialog</item>
+    </style>
+
+    <style name="Theme.FK.Player">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+
+    <style name="FkDialog" parent="ThemeOverlay.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg</item>
+        <item name="colorAccent">@color/cyan</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textColorSecondary">@color/text2</item>
+        <item name="android:listSelector">@drawable/dialog_item</item>
+    </style>
+
+    <style name="H1">
+        <item name="android:fontFamily">sans-serif-black</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="Chip">
+        <item name="android:background">@drawable/chip_bg</item>
+        <item name="android:paddingLeft">10dp</item>
+        <item name="android:paddingRight">10dp</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingBottom">4dp</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">#D6D3E4</item>
+    </style>
+
+    <style name="Field">
+        <item name="android:background">@drawable/field_bg</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textColorHint">@color/muted</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:paddingLeft">16dp</item>
+        <item name="android:paddingRight">16dp</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_marginTop">10dp</item>
+    </style>
+</resources>

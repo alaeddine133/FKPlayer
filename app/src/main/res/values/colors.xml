@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#07060D</color>
+    <color name="surface">#14121F</color>
+    <color name="card">#0DFFFFFF</color>
+    <color name="stroke">#1AFFFFFF</color>
+    <color name="text">#F5F3FF</color>
+    <color name="text2">#C9C5DC</color>
+    <color name="muted">#9590AD</color>
+    <color name="violet">#8B5CF6</color>
+    <color name="violet_deep">#3B1C8C</color>
+    <color name="violet_light">#A78BFA</color>
+    <color name="pink">#C084FC</color>
+    <color name="cyan">#22D3EE</color>
+    <color name="cyan_light">#A5F3FC</color>
+    <color name="live">#F43F5E</color>
+</resources>
