@@ -43,16 +43,15 @@ class VodActivity : BaseActivity() {
             SERIES -> setTop("Séries", "${Repo.series.size} séries")
             else -> setTop("Ma liste", "Appui long ou Menu pour retirer")
         }
-        source.groupingBy { it.catId }.eachCountTo(counts)
+        byCat.forEach { (k, v) -> counts[k] = v.size }
         cats = when (mode) {
-            MOVIES -> listOf(Category(K_FAV, "Ma liste"), Category(K_RESUME, "Reprendre"), Category(K_ALL, "Tous les films")) +
-                Repo.vodCats.filter { (counts[it.id] ?: 0) > 0 }
-            SERIES -> listOf(Category(K_FAV, "Ma liste"), Category(K_ALL, "Toutes les séries")) +
-                Repo.serCats.filter { (counts[it.id] ?: 0) > 0 }
+            MOVIES -> listOf(Category(K_FAV, "Ma liste"), Category(K_RESUME, "Reprendre"), Category(K_ALL, "Tous les films")) + Repo.vodCats
+            SERIES -> listOf(Category(K_FAV, "Ma liste"), Category(K_ALL, "Toutes les séries")) + Repo.serCats
             else -> listOf(Category(K_FILMS, "Films"), Category(K_SER, "Séries"), Category(K_CH, "Chaînes"))
         }
 
-        val catList = findViewById<RecyclerView>(R.id.cats)
+        val catList = findViewById<RecyclerView>(R.id.cats).fast()
+        grid.fast()
         catList.layoutManager = LinearLayoutManager(this)
         catAd = Adapter(R.layout.item_cat, 1.03f) { v, c, i ->
             v.isActivated = i == selCat
@@ -85,14 +84,20 @@ class VodActivity : BaseActivity() {
         popIn(catList, grid)
     }
 
+    private val byCat: Map<String, List<Item>> get() = if (mode == SERIES) Repo.serByCat else Repo.vodByCat
+
+    /** Favoris d'un type, retrouvés directement par leur clé (instantané même avec un gros catalogue). */
+    private fun favs(vararg types: Int): List<Item> =
+        Prefs.favs().mapNotNull { Repo.byKey(it) }.filter { it.type in types }.sortedBy { it.name.lowercase() }
+
     private fun itemsFor(c: Category): List<Item> = when (c.id) {
-        K_FAV -> source.filter { Prefs.isFav(it.key) }
+        K_FAV -> if (mode == SERIES) favs(Type.SERIES, Type.EPISODE) else favs(Type.MOVIE)
         K_RESUME -> Prefs.resumeKeys().filter { it.startsWith("${Type.MOVIE}:") }.mapNotNull { Repo.byKey(it) }
         K_ALL -> source
-        K_FILMS -> Repo.vod.filter { Prefs.isFav(it.key) }
-        K_SER -> Repo.series.filter { Prefs.isFav(it.key) }
-        K_CH -> Repo.live.filter { Prefs.isFav(it.key) }
-        else -> source.filter { it.catId == c.id }
+        K_FILMS -> favs(Type.MOVIE)
+        K_SER -> favs(Type.SERIES, Type.EPISODE)
+        K_CH -> favs(Type.LIVE)
+        else -> byCat[c.id] ?: emptyList()
     }
 
     private fun select(i: Int) {

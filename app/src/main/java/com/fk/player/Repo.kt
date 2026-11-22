@@ -1,7 +1,10 @@
 package com.fk.player
 
+import android.content.Context
 import android.net.Uri
 import android.util.Base64
+import android.util.JsonReader
+import android.util.JsonToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -10,12 +13,17 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 import java.text.Normalizer
 import java.util.concurrent.TimeUnit
 
-/** Accès aux listes : Xtream Codes (API player_api.php) ou playlist M3U. */
+/**
+ * Accès aux listes : Xtream Codes (player_api.php) ou playlist M3U.
+ * - Les réponses sont gardées sur la box : l'appli s'ouvre instantanément, puis se met à jour en arrière-plan.
+ * - Tout le décodage se fait hors du fil d'affichage (pas de gel, même avec 50 000 chaînes).
+ */
 object Repo {
 
     val http: OkHttpClient = OkHttpClient.Builder()
@@ -26,16 +34,27 @@ object Repo {
         .retryOnConnectionFailure(true)
         .build()
 
+    private lateinit var filesDir: File
+    fun init(c: Context) { filesDir = c.filesDir }
+
     @Volatile var loaded = false
+    @Volatile var fromCache = false
     var expDate: Long? = null
     var maxConnections: String? = null
 
-    var liveCats: List<Category> = emptyList()
-    var vodCats: List<Category> = emptyList()
-    var serCats: List<Category> = emptyList()
-    var live: List<Item> = emptyList()
-    var vod: List<Item> = emptyList()
-    var series: List<Item> = emptyList()
+    var liveCats: List<Category> = emptyList(); private set
+    var vodCats: List<Category> = emptyList(); private set
+    var serCats: List<Category> = emptyList(); private set
+    var live: List<Item> = emptyList(); private set
+    var vod: List<Item> = emptyList(); private set
+    var series: List<Item> = emptyList(); private set
+
+    // Index préparés une seule fois (catégories + recherche)
+    var liveByCat: Map<String, List<Item>> = emptyMap(); private set
+    var vodByCat: Map<String, List<Item>> = emptyMap(); private set
+    var serByCat: Map<String, List<Item>> = emptyMap(); private set
+    private var searchIndex: List<Pair<String, Item>> = emptyList()
+    private var byKeyIndex: Map<String, Item> = emptyMap()
 
     private val epgCache = HashMap<String, Pair<Long, List<Epg>>>()
 
@@ -57,6 +76,44 @@ object Repo {
         }
     }
 
+    /* ---------- Cache disque ---------- */
+
+    private fun cacheDir(): File {
+        val id = (Prefs.mode + Prefs.server + Prefs.user + Prefs.m3u).hashCode().toString(16)
+        return File(filesDir, "cache/$id").apply { mkdirs() }
+    }
+
+    /**
+     * Lit depuis le cache si demandé (et assez récent), sinon télécharge directement dans le fichier
+     * (jamais tout le catalogue en mémoire), écrit en .tmp puis renommé : une coupure ne l'abîme pas.
+     */
+    private suspend fun fetch(key: String, url: String, preferCache: Boolean): File = withContext(Dispatchers.IO) {
+        val f = File(cacheDir(), "$key.json")
+        if (preferCache && f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * 3600_000L) {
+            fromCache = true
+            return@withContext f
+        }
+        try {
+            val tmp = File(f.path + ".tmp")
+            val req = Request.Builder().url(url).header("User-Agent", FkPlayer.userAgent()).build()
+            http.newCall(req).execute().use { r ->
+                if (!r.isSuccessful) throw IOException("le serveur répond ${r.code}")
+                r.body!!.byteStream().use { i -> tmp.outputStream().use { i.copyTo(it) } }
+            }
+            if (tmp.length() > 2 || !f.exists()) { if (!tmp.renameTo(f)) throw IOException("stockage plein") } else tmp.delete()
+            f
+        } catch (e: Exception) {
+            if (f.exists()) { fromCache = true; f } else throw e
+        }
+    }
+
+    private fun cacheFile() = File(cacheDir(), if (isXtream) "auth.json" else "m3u.json")
+    fun hasCache(): Boolean = cacheFile().exists()
+    /** Âge des listes gardées sur la box (ms). */
+    fun cacheAge(): Long = System.currentTimeMillis() - cacheFile().lastModified()
+
+    /* ---------- Saisie ---------- */
+
     /** Normalise le serveur saisi : ajoute http://, retire un éventuel chemin. */
     fun cleanServer(raw: String): String {
         var s = raw.trim()
@@ -66,7 +123,7 @@ object Repo {
         return "${u.scheme}://${u.host}$port"
     }
 
-    /** Un lien M3U « get.php?username=…&password=… » est en fait un compte Xtream : on le convertit. */
+    /** Un lien M3U « get.php?username=…&password=… » est un compte Xtream : on le convertit. */
     fun xtreamFromM3u(link: String): Triple<String, String, String>? {
         return try {
             val u = Uri.parse(link.trim())
@@ -81,80 +138,122 @@ object Repo {
 
     /* ---------- Connexion + chargement ---------- */
 
-    suspend fun login() {
+    /**
+     * Connexion et chargement complet.
+     * preferCache = true : ouverture instantanée depuis la box si possible.
+     */
+    suspend fun load(preferCache: Boolean, progress: (String) -> Unit) = withContext(Dispatchers.Default) {
+        fromCache = false
         if (isXtream) {
-            val txt = get(api(null))
-            val o = try { JSONObject(txt) } catch (e: Exception) { throw IOException("réponse invalide du serveur") }
+            val auth = fetch("auth", api(null), preferCache)
+            val o = try { JSONObject(auth.readText()) } catch (e: Exception) { throw IOException("réponse invalide du serveur") }
             val ui = o.optJSONObject("user_info") ?: throw IOException("identifiants refusés")
             if (ui.optInt("auth", 0) != 1) throw IOException("identifiants incorrects")
             val st = ui.optString("status", "Active")
             if (st.isNotBlank() && !st.equals("Active", true)) throw IOException("abonnement $st")
             expDate = ui.optString("exp_date").toLongOrNull()?.times(1000)
             maxConnections = ui.optString("max_connections").ifBlank { null }
-        } else {
-            expDate = null
-        }
-    }
 
-    suspend fun loadAll(progress: (String) -> Unit) {
-        loaded = false
-        if (isXtream) {
+            progress(if (preferCache && hasCache()) "Ouverture…" else "Chargement des chaînes, films et séries…")
             coroutineScope {
-                progress("Chargement des chaînes, films et séries…")
-                val lc = async { cats(get(api("get_live_categories"))) }
-                val vc = async { cats(get(api("get_vod_categories"))) }
-                val sc = async { cats(get(api("get_series_categories"))) }
-                val ls = async { parseLive(get(api("get_live_streams"))) }
-                val vs = async { parseVod(get(api("get_vod_streams"))) }
-                val ss = async { parseSeries(get(api("get_series"))) }
-                liveCats = sortCats(lc.await()); vodCats = sortCats(vc.await()); serCats = sortCats(sc.await())
-                live = ls.await(); vod = vs.await(); series = ss.await()
+                val lc = async { cats(fetch("live_cats", api("get_live_categories"), preferCache)) }
+                val vc = async { cats(fetch("vod_cats", api("get_vod_categories"), preferCache)) }
+                val sc = async { cats(fetch("ser_cats", api("get_series_categories"), preferCache)) }
+                val ls = async { parseLive(fetch("live", api("get_live_streams"), preferCache)) }
+                val vs = async { parseVod(fetch("vod", api("get_vod_streams"), preferCache)) }
+                val ss = async { parseSeries(fetch("series", api("get_series"), preferCache)) }
+                publish(lc.await(), vc.await(), sc.await(), ls.await(), vs.await(), ss.await())
             }
         } else {
+            expDate = null
             progress("Téléchargement de la playlist…")
-            parseM3u(get(Prefs.m3u.trim()))
+            parseM3u(fetch("m3u", Prefs.m3u.trim(), preferCache))
         }
-        epgCache.clear()
+        synchronized(epgCache) { epgCache.clear() }
         loaded = true
     }
 
-    /* ---------- Analyse Xtream ---------- */
-
-    private fun arr(s: String): JSONArray = try {
-        if (s.trimStart().startsWith("[")) JSONArray(s) else JSONArray()
-    } catch (e: Exception) { JSONArray() }
-
-    private fun JSONObject.s(k: String): String = if (isNull(k)) "" else optString(k, "")
-
-    private fun cats(s: String): List<Category> {
-        val a = arr(s)
-        return List(a.length()) { val o = a.getJSONObject(it); Category(o.s("category_id"), o.s("category_name").trim()) }
+    /** Remplace toutes les listes d'un coup et prépare les index. */
+    private fun publish(lc: List<Category>, vc: List<Category>, sc: List<Category>, l: List<Item>, v: List<Item>, s: List<Item>) {
+        // Les éléments dont la catégorie n'est pas déclarée vont tous dans « Autres »
+        fun group(items: List<Item>, cats: List<Category>): Map<String, List<Item>> {
+            val ids = cats.mapTo(HashSet()) { it.id }
+            return items.groupBy { if (it.catId in ids) it.catId else OTHERS }
+        }
+        val lbc = group(l, lc); val vbc = group(v, vc); val sbc = group(s, sc)
+        val idx = ArrayList<Pair<String, Item>>(l.size + v.size + s.size)
+        l.forEach { idx += norm(it.name) to it }; v.forEach { idx += norm(it.name) to it }; s.forEach { idx += norm(it.name) to it }
+        val keys = HashMap<String, Item>(l.size + v.size + s.size)
+        l.forEach { keys[it.key] = it }; v.forEach { keys[it.key] = it }; s.forEach { keys[it.key] = it }
+        // On garde les catégories qui contiennent au moins un élément
+        fun withOthers(c: List<Category>, m: Map<String, List<Item>>) =
+            sortCats(c.filter { m.containsKey(it.id) }) + (if (m.containsKey(OTHERS)) listOf(Category(OTHERS, "Autres")) else emptyList())
+        liveCats = withOthers(lc, lbc); vodCats = withOthers(vc, vbc); serCats = withOthers(sc, sbc)
+        live = l; vod = v; series = s
+        liveByCat = lbc; vodByCat = vbc; serByCat = sbc
+        searchIndex = idx; byKeyIndex = keys
     }
 
-    private fun parseLive(s: String): List<Item> {
-        val a = arr(s); val out = ArrayList<Item>(a.length())
-        for (i in 0 until a.length()) {
-            val o = a.optJSONObject(i) ?: continue
+    private const val OTHERS = "__autres"
+
+    /* ---------- Analyse Xtream (lecture en continu, élément par élément) ---------- */
+
+    /** Parcourt un tableau JSON d'objets depuis le fichier, sans le charger en entier. Erreur au milieu : on garde le début. */
+    private fun objects(f: File, each: (Map<String, String>) -> Unit) {
+        try {
+            JsonReader(f.bufferedReader()).use { r ->
+                r.isLenient = true
+                if (r.peek() != JsonToken.BEGIN_ARRAY) return
+                r.beginArray()
+                while (r.hasNext()) {
+                    if (r.peek() != JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
+                    val m = HashMap<String, String>()
+                    r.beginObject()
+                    while (r.hasNext()) {
+                        val k = r.nextName()
+                        when (r.peek()) {
+                            JsonToken.STRING, JsonToken.NUMBER -> m[k] = r.nextString()
+                            JsonToken.BOOLEAN -> m[k] = r.nextBoolean().toString()
+                            else -> r.skipValue()
+                        }
+                    }
+                    r.endObject()
+                    each(m)
+                }
+            }
+        } catch (e: Exception) { }
+    }
+
+    private fun Map<String, String>.s(k: String): String = this[k] ?: ""
+    private fun JSONObject.s(k: String): String = if (isNull(k)) "" else optString(k, "")
+
+    private fun cats(f: File): List<Category> {
+        val out = ArrayList<Category>()
+        objects(f) { o -> out += Category(o.s("category_id"), o.s("category_name").trim()) }
+        return out
+    }
+
+    private fun parseLive(f: File): List<Item> {
+        val out = ArrayList<Item>()
+        objects(f) { o ->
             out += Item(Type.LIVE, o.s("stream_id"), o.s("name").trim(), o.s("stream_icon").ifBlank { null },
-                o.s("category_id"), num = o.optInt("num", i + 1), epgId = o.s("epg_channel_id").ifBlank { null })
+                o.s("category_id"), num = o.s("num").toIntOrNull() ?: (out.size + 1), epgId = o.s("epg_channel_id").ifBlank { null })
         }
         return out
     }
 
-    private fun parseVod(s: String): List<Item> {
-        val a = arr(s); val out = ArrayList<Item>(a.length())
-        for (i in 0 until a.length()) {
-            val o = a.optJSONObject(i) ?: continue
+    private fun parseVod(f: File): List<Item> {
+        val out = ArrayList<Item>()
+        objects(f) { o ->
             out += Item(Type.MOVIE, o.s("stream_id"), o.s("name").trim(), o.s("stream_icon").ifBlank { null },
                 o.s("category_id"), ext = o.s("container_extension").ifBlank { "mp4" }, rating = rating(o.s("rating")))
         }
         return out
     }
 
-    private fun parseSeries(s: String): List<Item> {
-        val a = arr(s); val out = ArrayList<Item>(a.length())
-        for (i in 0 until a.length()) {
-            val o = a.optJSONObject(i) ?: continue
+    private fun parseSeries(f: File): List<Item> {
+        val out = ArrayList<Item>()
+        objects(f) { o ->
             out += Item(Type.SERIES, o.s("series_id"), o.s("name").trim(), o.s("cover").ifBlank { null },
                 o.s("category_id"), rating = rating(o.s("rating")))
         }
@@ -163,7 +262,7 @@ object Repo {
 
     private fun rating(r: String): String? {
         val v = r.replace(',', '.').toDoubleOrNull() ?: return null
-        return if (v > 0) String.format("%.1f", if (v > 10) v / 10 else v) else null
+        return if (v > 0) String.format(java.util.Locale.FRANCE, "%.1f", if (v > 10) v / 10 else v) else null
     }
 
     /** Les catégories françaises passent en premier (réglable). */
@@ -175,15 +274,16 @@ object Repo {
     fun isFrench(n: String): Boolean {
         val u = n.uppercase()
         return u.startsWith("FR") || u.contains("FRANCE") || u.contains("FRENCH") || u.contains("|FR|") ||
-            u.contains("FR |") || u.contains("FR:") || u.contains("VF") || u.contains("FRANÇAIS") || u.contains("FRANCAIS")
+            u.contains("FR |") || u.contains("FR:") || u.contains(" VF") || u.startsWith("VF") ||
+            u.contains("FRANÇAIS") || u.contains("FRANCAIS")
     }
 
     /* ---------- Séries ---------- */
 
     data class SeriesInfo(val plot: String?, val cover: String?, val genre: String?, val year: String?, val seasons: Map<Int, List<Episode>>)
 
-    suspend fun seriesInfo(id: String): SeriesInfo {
-        val o = JSONObject(get(api("get_series_info", "&series_id=$id")))
+    suspend fun seriesInfo(id: String): SeriesInfo = withContext(Dispatchers.Default) {
+        val o = JSONObject(fetch("serie_$id", api("get_series_info", "&series_id=$id"), false).readText())
         val info = o.optJSONObject("info")
         val eps = o.opt("episodes")
         val map = sortedMapOf<Int, MutableList<Episode>>()
@@ -214,7 +314,7 @@ object Repo {
             }
         }
         map.values.forEach { l -> l.sortBy { it.num } }
-        return SeriesInfo(
+        SeriesInfo(
             info?.s("plot")?.ifBlank { null }, info?.s("cover")?.ifBlank { null },
             info?.s("genre")?.ifBlank { null }, info?.s("releaseDate")?.take(4)?.ifBlank { null }, map
         )
@@ -238,18 +338,29 @@ object Repo {
 
     /* ---------- Guide TV (EPG court) ---------- */
 
+    /** Guide déjà en mémoire (aucune requête réseau) : pour l'affichage rapide des listes. */
+    fun cachedEpg(it: Item): List<Epg>? = synchronized(epgCache) {
+        epgCache[it.id]?.second?.filter { e -> e.end > System.currentTimeMillis() }
+    }
+
     suspend fun shortEpg(it: Item): List<Epg> {
         if (!isXtream || it.type != Type.LIVE) return emptyList()
-        epgCache[it.id]?.let { (t, l) -> if (System.currentTimeMillis() - t < 5 * 60_000) return l }
+        synchronized(epgCache) {
+            epgCache[it.id]?.let { (t, l) ->
+                if (System.currentTimeMillis() - t < 5 * 60_000) return l.filter { e -> e.end > System.currentTimeMillis() }
+            }
+        }
         val list = try {
-            val o = JSONObject(get(api("get_short_epg", "&stream_id=${it.id}&limit=4")))
-            val a = o.optJSONArray("epg_listings") ?: JSONArray()
-            List(a.length()) { i ->
-                val e = a.getJSONObject(i)
-                Epg(b64(e.s("title")), (e.s("start_timestamp").toLongOrNull() ?: 0) * 1000, (e.s("stop_timestamp").toLongOrNull() ?: 0) * 1000)
-            }.filter { e -> e.end > System.currentTimeMillis() }
+            withContext(Dispatchers.Default) {
+                val o = JSONObject(get(api("get_short_epg", "&stream_id=${it.id}&limit=4")))
+                val a = o.optJSONArray("epg_listings") ?: JSONArray()
+                List(a.length()) { i ->
+                    val e = a.getJSONObject(i)
+                    Epg(b64(e.s("title")), (e.s("start_timestamp").toLongOrNull() ?: 0) * 1000, (e.s("stop_timestamp").toLongOrNull() ?: 0) * 1000)
+                }.filter { e -> e.end > System.currentTimeMillis() }.sortedBy { e -> e.start }
+            }
         } catch (e: Exception) { emptyList() }
-        epgCache[it.id] = System.currentTimeMillis() to list
+        synchronized(epgCache) { epgCache[it.id] = System.currentTimeMillis() to list }
         return list
     }
 
@@ -260,15 +371,18 @@ object Repo {
     /* ---------- Playlist M3U ---------- */
 
     private val attrRe = Regex("""([\w-]+)="([^"]*)"""")
+    private val movieRe = Regex("""\.(mp4|mkv|avi|mov|m4v)(\?|$)""")
 
-    private fun parseM3u(text: String) {
-        if (!text.trimStart().startsWith("#EXTM3U") && !text.contains("#EXTINF")) throw IOException("ce lien n'est pas une playlist M3U")
+    private fun parseM3u(f: File) {
+        var isM3u = false
         val l = ArrayList<Item>(); val m = ArrayList<Item>(); val s = ArrayList<Item>()
         val lc = LinkedHashMap<String, Category>(); val mc = LinkedHashMap<String, Category>(); val sc = LinkedHashMap<String, Category>()
         var name = ""; var logo: String? = null; var group = "Autres"; var n = 0
-        text.lineSequence().forEach { raw ->
+        f.useLines { lines -> lines.forEach { raw ->
             val line = raw.trim()
+            if (line.startsWith("#EXTM3U")) isM3u = true
             if (line.startsWith("#EXTINF")) {
+                isM3u = true
                 val attrs = attrRe.findAll(line).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
                 name = line.substringAfterLast(",").trim().ifBlank { attrs["tvg-name"] ?: "Sans nom" }
                 logo = attrs["tvg-logo"]?.ifBlank { null }
@@ -276,19 +390,17 @@ object Repo {
             } else if (line.isNotEmpty() && !line.startsWith("#")) {
                 n++
                 val low = line.lowercase()
-                val isMovie = low.contains("/movie/") || Regex("""\.(mp4|mkv|avi|mov)(\?|$)""").containsMatchIn(low)
-                val isSeries = low.contains("/series/")
                 val id = "m3u$n"
                 when {
-                    isSeries -> { sc.getOrPut(group) { Category(group, group) }; s += Item(Type.EPISODE, id, name, logo, group, url = line) }
-                    isMovie -> { mc.getOrPut(group) { Category(group, group) }; m += Item(Type.MOVIE, id, name, logo, group, url = line) }
+                    low.contains("/series/") -> { sc.getOrPut(group) { Category(group, group) }; s += Item(Type.EPISODE, id, name, logo, group, url = line) }
+                    low.contains("/movie/") || movieRe.containsMatchIn(low) -> { mc.getOrPut(group) { Category(group, group) }; m += Item(Type.MOVIE, id, name, logo, group, url = line) }
                     else -> { lc.getOrPut(group) { Category(group, group) }; l += Item(Type.LIVE, id, name, logo, group, url = line, num = l.size + 1) }
                 }
                 name = ""; logo = null; group = "Autres"
             }
-        }
-        live = l; vod = m; series = s
-        liveCats = sortCats(lc.values.toList()); vodCats = sortCats(mc.values.toList()); serCats = sortCats(sc.values.toList())
+        } }
+        if (!isM3u) throw IOException("ce lien n'est pas une playlist M3U")
+        publish(lc.values.toList(), mc.values.toList(), sc.values.toList(), l, m, s)
     }
 
     /* ---------- Recherche ---------- */
@@ -298,20 +410,13 @@ object Repo {
     fun search(q: String, types: Set<Int>, limit: Int = 300): List<Item> {
         val k = norm(q.trim()); if (k.length < 2) return emptyList()
         val out = ArrayList<Item>()
-        if (Type.LIVE in types) live.filterTo(out) { norm(it.name).contains(k) }
-        if (Type.MOVIE in types) vod.filterTo(out) { norm(it.name).contains(k) }
-        if (Type.SERIES in types) series.filterTo(out) { norm(it.name).contains(k) }
-        return out.take(limit)
+        for ((n, it) in searchIndex) {
+            val t = if (it.type == Type.EPISODE) Type.SERIES else it.type
+            if (t in types && n.contains(k)) { out += it; if (out.size >= limit) break }
+        }
+        // Les titres qui commencent par la recherche d'abord
+        return out.sortedBy { if (norm(it.name).startsWith(k)) 0 else 1 }
     }
 
-    fun byKey(key: String): Item? {
-        val t = key.substringBefore(':').toIntOrNull() ?: return null
-        val id = key.substringAfter(':')
-        return when (t) {
-            Type.LIVE -> live.firstOrNull { it.id == id }
-            Type.MOVIE -> vod.firstOrNull { it.id == id }
-            Type.SERIES, Type.EPISODE -> series.firstOrNull { it.id == id }
-            else -> null
-        }
-    }
+    fun byKey(key: String): Item? = byKeyIndex[key]
 }

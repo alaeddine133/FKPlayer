@@ -13,6 +13,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
@@ -33,7 +34,7 @@ object FkPlayer {
     fun userAgent(): String = when (Prefs.ua) {
         1 -> "VLC/3.0.20 LibVLC/3.0.20"
         2 -> "Mozilla/5.0 (Linux; Android 11; TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
-        else -> "FKPlayer/1.0 (Linux;Android) ExoPlayerLib/1.4.1"
+        else -> "FKPlayer/1.0 (Linux;Android) ExoPlayerLib/1.5.0"
     }
 
     fun resizeMode(): Int = when (Prefs.resize) {
@@ -55,7 +56,9 @@ object FkPlayer {
             .setBackBuffer(if (live) 0 else 20_000, false)
             .build()
 
-        val http = OkHttpDataSource.Factory(Repo.http).setUserAgent(userAgent())
+        // Flux bloqué 20 s = coupure détectée vite, puis reconnexion automatique
+        val client = Repo.http.newBuilder().readTimeout(20, java.util.concurrent.TimeUnit.SECONDS).build()
+        val http = OkHttpDataSource.Factory(client).setUserAgent(userAgent())
         val ds = DefaultDataSource.Factory(ctx, http)
 
         val extractors = DefaultExtractorsFactory()
@@ -74,6 +77,8 @@ object FkPlayer {
 
         val player = ExoPlayer.Builder(ctx, renderers)
             .setLoadControl(load)
+            // Depart en bonne qualite sur les flux HLS multi-debits (au lieu de la plus basse)
+            .setBandwidthMeter(DefaultBandwidthMeter.Builder(ctx).setInitialBitrateEstimate(10_000_000).build())
             .setMediaSourceFactory(sources)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),

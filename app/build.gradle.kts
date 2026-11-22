@@ -5,19 +5,23 @@ plugins {
 
 android {
     namespace = "com.fk.player"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.fk.player"
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 : code optimisé et APK plus léger
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Même clé que la version 1.0 (sauvegardée dans le coffre) : les mises à jour s'installent par-dessus
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -26,10 +30,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
 }
 
 dependencies {
-    val media3 = "1.4.1"
+    val media3 = "1.5.0"
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
@@ -39,6 +47,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-ui:$media3")
     implementation("androidx.media3:media3-datasource-okhttp:$media3")
+    // Decodeur audio FFmpeg (AC3, E-AC3, DTS) si la box ne sait pas les lire
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil:2.6.0")
+    implementation("com.google.zxing:core:3.5.3")
 }

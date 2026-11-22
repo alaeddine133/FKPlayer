@@ -47,6 +47,7 @@ class PlayerActivity : BaseActivity() {
     private val isLive: Boolean get() = cur.type == Type.LIVE
 
     private var retries = 0
+    private var played = false  // le chien de garde n'agit qu'apres une premiere lecture
     private var zapBuffer = ""
     private var centerDownAt = 0L
     private var longHandled = false
@@ -56,6 +57,19 @@ class PlayerActivity : BaseActivity() {
         override fun run() { updateProgress(); ui.postDelayed(this, 1000) }
     }
     private val zapGo = Runnable { goToNumber() }
+
+    /** Chien de garde : flux bloqué trop longtemps en chargement → on le relance. */
+    private val watchdog = Runnable {
+        if (player?.playbackState == Player.STATE_BUFFERING && Prefs.reconnect) { status("Flux bloqué, relance…", 2000); restart() }
+    }
+
+    private fun restart() {
+        val p = player ?: return
+        val pos = p.currentPosition
+        p.setMediaItem(FkPlayer.mediaItem(Repo.streamUrl(cur), isLive))
+        if (!isLive && pos > 0) p.seekTo(pos)
+        p.prepare(); p.playWhenReady = true
+    }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -91,7 +105,7 @@ class PlayerActivity : BaseActivity() {
     override fun onStop() {
         super.onStop()
         savePosition()
-        ui.removeCallbacks(ticker)
+        ui.removeCallbacks(ticker); ui.removeCallbacks(watchdog)
         player?.release(); player = null; pv.player = null
     }
 
@@ -99,7 +113,7 @@ class PlayerActivity : BaseActivity() {
 
     private fun load(resume: Boolean) {
         val p = player ?: return
-        retries = 0
+        retries = 0; played = false
         val it = cur
         p.setMediaItem(FkPlayer.mediaItem(Repo.streamUrl(it), isLive))
         if (!isLive && resume) {
@@ -183,7 +197,14 @@ class PlayerActivity : BaseActivity() {
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
             spinner.visibility = if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
-            if (state == Player.STATE_READY) { retries = 0; status.visibility = View.GONE; techInfo() }
+            ui.removeCallbacks(watchdog)
+            if (state == Player.STATE_BUFFERING && played) ui.postDelayed(watchdog, if (isLive) 15_000 else 30_000)
+            if (state == Player.STATE_READY) { retries = 0; played = true; status.visibility = View.GONE; techInfo() }
+            // Un flux direct ne « finit » jamais : si le serveur coupe, on relance
+            if (state == Player.STATE_ENDED && isLive) {
+                if (retries < 12) { retries++; status("Reconnexion… ($retries)", 2000); ui.postDelayed({ restart() }, 800L * retries) }
+                else status("Le serveur a coupé la chaîne", 0)
+            }
             if (state == Player.STATE_ENDED && !isLive) {
                 Prefs.clearPos(cur.key)
                 if (Prefs.autoNext && index + 1 < items.size) { index++; status("Épisode suivant…", 2000); load(resume = true) }
@@ -205,7 +226,7 @@ class PlayerActivity : BaseActivity() {
                     pl.setMediaItem(FkPlayer.mediaItem(Repo.streamUrl(cur), isLive))
                     if (!isLive && pos > 0) pl.seekTo(pos)
                     pl.prepare(); pl.playWhenReady = true
-                }, (1500L * retries).coerceAtMost(6000L))
+                }, (1000L * retries).coerceAtMost(5000L))
             } else {
                 spinner.visibility = View.GONE
                 status(errorText(error), 0)
@@ -217,7 +238,13 @@ class PlayerActivity : BaseActivity() {
     }
 
     private fun errorText(e: PlaybackException): String = when (e.errorCode) {
-        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Flux refusé par le serveur (abonnement, connexions max ou chaîne coupée)"
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> when ((e.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode) {
+            401, 403 -> "Accès refusé : abonnement expiré ou trop d'appareils connectés"
+            404 -> "Chaîne introuvable sur le serveur"
+            429, 456, 458, 509 -> "Trop de connexions en même temps sur ce compte"
+            in 500..599 -> "Le serveur IPTV a un problème, réessaie dans un moment"
+            else -> "Flux refusé par le serveur"
+        }
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "Pas de connexion au serveur"
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,

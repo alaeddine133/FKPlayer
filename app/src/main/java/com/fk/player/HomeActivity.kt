@@ -6,6 +6,8 @@ import android.view.View
 import android.widget.TextView
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /** Accueil « Mosaïque » : grande tuile Direct + Films, Séries, Ma liste, Recherche, Paramètres. */
 class HomeActivity : BaseActivity() {
@@ -39,10 +41,21 @@ class HomeActivity : BaseActivity() {
         swing(findViewById(R.id.fanB), 7f, 11f)
 
         live.requestFocus()
+
+        // Ouvert depuis les listes gardées sur la box : mise à jour discrète en arrière-plan
+        if (intent.getBooleanExtra("refresh", false) && Repo.cacheAge() > 6 * 3600_000L) {
+            lifecycleScope.launch {
+                try { Repo.load(preferCache = false) { }; refreshTexts() } catch (_: Exception) { }
+            }
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        refreshTexts()
+    }
+
+    private fun refreshTexts() {
         if (!Repo.loaded) return
         val nf = java.text.NumberFormat.getIntegerInstance(java.util.Locale.FRANCE)
         findViewById<TextView>(R.id.liveCount)?.text = "DIRECT · ${nf.format(Repo.live.size)} chaînes"

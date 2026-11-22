@@ -34,6 +34,8 @@ class LiveActivity : BaseActivity() {
     private var current: Item? = null
     private var pendingCat: Runnable? = null
     private var pendingPreview: Runnable? = null
+    private var ready = false
+    private var previewRetry = 0
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -42,11 +44,11 @@ class LiveActivity : BaseActivity() {
         setTop("Direct", "${Repo.live.size} chaînes" + if (Prefs.frFirst) " · français en premier" else "")
         pulse(findViewById(R.id.liveDot))
 
-        Repo.live.groupingBy { it.catId }.eachCountTo(counts)
-        cats = listOf(Category(FAV, "Favoris"), Category(ALL, "Toutes les chaînes")) +
-            Repo.liveCats.filter { (counts[it.id] ?: 0) > 0 }
+        Repo.liveByCat.forEach { (k, v) -> counts[k] = v.size }
+        cats = listOf(Category(FAV, "Favoris"), Category(ALL, "Toutes les chaînes")) + Repo.liveCats
 
-        catList = findViewById(R.id.cats); chList = findViewById(R.id.chans); pv = findViewById(R.id.previewVideo)
+        catList = findViewById<RecyclerView>(R.id.cats).fast(); chList = findViewById<RecyclerView>(R.id.chans).fast()
+        pv = findViewById(R.id.previewVideo)
         catList.layoutManager = LinearLayoutManager(this)
         chList.layoutManager = LinearLayoutManager(this)
 
@@ -60,8 +62,11 @@ class LiveActivity : BaseActivity() {
             }
         }
         catAd.onFocus = { _, i ->
-            pendingCat?.let { ui.removeCallbacks(it) }
-            pendingCat = Runnable { selectCat(i) }.also { ui.postDelayed(it, 280) }
+            // Ignoré à l'ouverture : seul un vrai déplacement de l'utilisateur change de catégorie
+            if (ready) {
+                pendingCat?.let { ui.removeCallbacks(it) }
+                pendingCat = Runnable { selectCat(i) }.also { ui.postDelayed(it, 280) }
+            }
         }
         catAd.onClick = { _, i -> selectCat(i); chList.post { chList.getChildAt(0)?.requestFocus() } }
         catList.adapter = catAd
@@ -82,13 +87,16 @@ class LiveActivity : BaseActivity() {
         selCat = if (lastCat >= 0) lastCat else if (Prefs.favs().any { it.startsWith("${Type.LIVE}:") }) 0 else 1
         catAd.items = cats
         loadChannels()
+        // Catégorie mémorisée mais vide (ex. favoris retirés) : on ouvre « Toutes les chaînes »
+        if (chans.isEmpty() && selCat != 1) { selCat = 1; loadChannels() }
         val lastIdx = chans.indexOfFirst { it.id == Prefs.lastLiveId }
-        chList.post {
-            if (lastIdx >= 0) {
-                (chList.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(lastIdx, 0)
-                chList.post { chList.findViewHolderForAdapterPosition(lastIdx)?.itemView?.requestFocus() }
-            } else chList.getChildAt(0)?.requestFocus() ?: catList.getChildAt(selCat)?.requestFocus()
-        }
+        if (lastIdx >= 0) (chList.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(lastIdx, 0)
+        // On attend que les listes soient dessinées avant de placer le focus sur la chaîne
+        ui.postDelayed({
+            val target = chList.findViewHolderForAdapterPosition(lastIdx.coerceAtLeast(0))?.itemView
+            if (target != null) target.requestFocus() else catList.getChildAt(selCat)?.requestFocus()
+            ui.postDelayed({ ready = true }, 400)
+        }, 350)
         popIn(catList, chList, findViewById(R.id.preview))
     }
 
@@ -100,15 +108,8 @@ class LiveActivity : BaseActivity() {
         val logo = v.findViewById<ImageView>(R.id.logo)
         if (c.icon != null) logo.load(c.icon) { crossfade(true); listener(onError = { _, _ -> logo.setImageDrawable(null) }) } else logo.setImageDrawable(null)
         v.findViewById<View>(R.id.fav).visibility = if (Prefs.isFav(c.key)) View.VISIBLE else View.GONE
-        val now = v.findViewById<TextView>(R.id.now)
-        now.text = ""
-        if (Repo.isXtream) {
-            now.tag = c.id
-            lifecycleScope.launch {
-                val e = Repo.shortEpg(c).firstOrNull()
-                if (now.tag == c.id) now.text = e?.title ?: ""
-            }
-        }
+        // Programme en cours : seulement s'il est déjà connu (pas de requête par ligne → défilement fluide)
+        v.findViewById<TextView>(R.id.now).text = Repo.cachedEpg(c)?.firstOrNull()?.title ?: ""
     }
 
     private fun selectCat(i: Int) {
@@ -121,9 +122,9 @@ class LiveActivity : BaseActivity() {
     private fun loadChannels() {
         val c = cats.getOrNull(selCat) ?: return
         chans = when (c.id) {
-            FAV -> Repo.live.filter { Prefs.isFav(it.key) }
+            FAV -> Prefs.favs().mapNotNull { Repo.byKey(it) }.filter { it.type == Type.LIVE }.sortedBy { it.num }
             ALL -> Repo.live
-            else -> Repo.live.filter { it.catId == c.id }
+            else -> Repo.liveByCat[c.id] ?: emptyList()
         }
         chAd.items = chans
         chList.scrollToPosition(0)
@@ -138,9 +139,17 @@ class LiveActivity : BaseActivity() {
                 findViewById<ProgressBar>(R.id.previewLoading).visibility = if (s == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
             }
             override fun onPlayerError(error: PlaybackException) {
+                val c = current ?: return
+                // Une relance automatique avant d'afficher l'erreur
+                if (previewRetry < 2) {
+                    previewRetry++
+                    ui.postDelayed({ if (current?.id == c.id) { player?.setMediaItem(FkPlayer.mediaItem(Repo.streamUrl(c), true)); player?.prepare() } }, 1500)
+                    return
+                }
                 findViewById<TextView>(R.id.pvTitle).text = "Chaîne indisponible pour le moment"
                 findViewById<ProgressBar>(R.id.previewLoading).visibility = View.GONE
             }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { if (isPlaying) previewRetry = 0 }
         })
         pv.player = p
         player = p
@@ -155,6 +164,7 @@ class LiveActivity : BaseActivity() {
         chans.indexOfFirst { it.id == c.id }.takeIf { it >= 0 }?.let { chAd.notifyItemChanged(it) }
 
         val p = ensurePlayer()
+        previewRetry = 0
         p.setMediaItem(FkPlayer.mediaItem(Repo.streamUrl(c), true))
         p.prepare(); p.playWhenReady = true
 
@@ -167,6 +177,7 @@ class LiveActivity : BaseActivity() {
         lifecycleScope.launch {
             val epg = Repo.shortEpg(c)
             if (current?.id != c.id) return@launch
+            chans.indexOfFirst { it.id == c.id }.takeIf { it >= 0 }?.let { chAd.notifyItemChanged(it) }
             val now = epg.firstOrNull()
             if (now != null) {
                 findViewById<TextView>(R.id.pvTitle).text = now.title
@@ -189,12 +200,12 @@ class LiveActivity : BaseActivity() {
         play(chans, i)
     }
 
-    override fun onStart() {
-        super.onStart()
+    override fun onResume() {
+        super.onResume()
         // Au retour du plein écran : on relance l'aperçu de la dernière chaîne vue
         if (Repo.loaded && ::chAd.isInitialized) {
             val last = chans.firstOrNull { it.id == Prefs.lastLiveId }
-            if (last != null && player == null) ui.postDelayed({ preview(last) }, 400)
+            if (last != null && player == null) ui.postDelayed({ if (player == null) preview(last) }, 1500)
             chAd.notifyDataSetChanged()
         }
     }

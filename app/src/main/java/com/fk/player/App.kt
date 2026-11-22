@@ -3,12 +3,26 @@ package com.fk.player
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 
-class App : Application() {
+class App : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
+        Repo.init(this)
     }
+
+    /** Images (logos, affiches) : cache mémoire + 150 Mo sur disque, format léger pour les box modestes. */
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .okHttpClient(Repo.http)
+        .crossfade(180)
+        .respectCacheHeaders(false)
+        .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.15).build() }
+        .diskCache { DiskCache.Builder().directory(cacheDir.resolve("images")).maxSizeBytes(150L * 1024 * 1024).build() }
+        .build()
 }
 
 /* ---------- Modèles ---------- */

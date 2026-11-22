@@ -69,6 +69,7 @@ class SettingsActivity : BaseActivity() {
         list.adapter = ad
         list.post { list.getChildAt(0)?.requestFocus() }
 
+        findViewById<TextView>(R.id.version).text = "FK PLAYER · version ${packageManager.getPackageInfo(packageName, 0).versionName}"
         val exp = Repo.expDate?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRANCE).format(java.util.Date(it)) }
         findViewById<TextView>(R.id.account).text = if (Repo.isXtream) {
             "Serveur : ${Prefs.server}\nUtilisateur : ${Prefs.user}\nExpire le : ${exp ?: "illimité"}" +
@@ -83,7 +84,7 @@ class SettingsActivity : BaseActivity() {
         toast("Actualisation en cours…")
         lifecycleScope.launch {
             try {
-                Repo.login(); Repo.loadAll { }
+                Repo.load(preferCache = false) { }
                 toast("Listes à jour : ${Repo.live.size} chaînes, ${Repo.vod.size} films, ${Repo.series.size} séries")
             } catch (e: Exception) {
                 toast("Échec : ${e.message}")

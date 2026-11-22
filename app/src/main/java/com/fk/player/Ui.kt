@@ -72,6 +72,14 @@ fun View.focusScale(scale: Float) {
     setOnFocusChangeListener { v, f -> v.animate().scaleX(if (f) scale else 1f).scaleY(if (f) scale else 1f).setDuration(160).start() }
 }
 
+/** Réglages de fluidité pour les longues listes. */
+fun RecyclerView.fast(): RecyclerView {
+    setHasFixedSize(true)
+    setItemViewCacheSize(24)
+    (itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
+    return this
+}
+
 /* ---------- Image à proportions fixes (affiches 2:3) ---------- */
 
 class RatioImageView @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : AppCompatImageView(c, a) {
@@ -139,6 +147,7 @@ open class BaseActivity : AppCompatActivity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         Prefs.init(applicationContext)
+        Repo.init(applicationContext)
     }
 
     override fun onResume() { super.onResume(); ui.post(tick); aurora() }
