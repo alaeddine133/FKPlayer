@@ -75,10 +75,12 @@ class LoginActivity : BaseActivity() {
     private fun startLink() {
         if (link != null) return
         val l = LinkServer { data -> runOnUiThread { fromPhone(data) } }
-        val url = l.url()
+        // Le serveur d'abord : l'adresse du QR contient le port qu'il a obtenu
+        val url = if (l.start()) l.url() else null
         val qr = findViewById<ImageView>(R.id.qr)
         val qrUrl = findViewById<TextView>(R.id.qrUrl)
-        if (url == null || !l.start()) {
+        if (url == null) {
+            l.stop()
             findViewById<View>(R.id.qrBox).alpha = 0.4f
             qrUrl.text = "Wi-Fi introuvable : connecte la box au réseau"
             return

@@ -32,7 +32,8 @@ class LinkServer(private val onReceive: (Map<String, String>) -> Unit) {
     fun start(): Boolean {
         if (running) return true
         return try {
-            val s = ServerSocket(0)  // port libre choisi par Android
+            // Port 8090 (adresse stable, facile à taper) ; s'il est déjà pris, Android en choisit un libre
+            val s = try { ServerSocket(8090) } catch (e: Exception) { ServerSocket(0) }
             port = s.localPort
             server = s; running = true
             thread(name = "fk-link", isDaemon = true) {
