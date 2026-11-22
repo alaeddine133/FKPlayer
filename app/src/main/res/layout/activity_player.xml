@@ -225,6 +225,23 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <!-- Boutons films / séries : ▼ pour y aller, ◀▶ pour choisir, OK pour valider -->
+        <LinearLayout
+            android:id="@+id/controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView android:id="@+id/btnRew" style="@style/PlayerBtn" android:text="◀◀  Retour rapide" />
+            <TextView android:id="@+id/btnBack10" style="@style/PlayerBtn" android:text="−10 s" />
+            <TextView android:id="@+id/btnPlay" style="@style/PlayerBtn" android:text="❚❚  Pause" />
+            <TextView android:id="@+id/btnFwd10" style="@style/PlayerBtn" android:text="+10 s" />
+            <TextView android:id="@+id/btnFf" style="@style/PlayerBtn" android:text="Avance rapide  ▶▶" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/next"
             android:layout_width="match_parent"

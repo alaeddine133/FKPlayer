@@ -28,6 +28,7 @@ class VodActivity : BaseActivity() {
     private val counts = HashMap<String, Int>()
     private var selCat = 0
     private var pending: Runnable? = null
+    private var ready = false  // le focus posé automatiquement à l'ouverture ne change pas de catégorie
 
     private val source: List<Item> get() = if (mode == SERIES) Repo.series else Repo.vod
 
@@ -60,8 +61,10 @@ class VodActivity : BaseActivity() {
             v.findViewById<TextView>(R.id.count).text = if (n > 0) n.toString() else ""
         }
         catAd.onFocus = { _, i ->
-            pending?.let { ui.removeCallbacks(it) }
-            pending = Runnable { select(i) }.also { ui.postDelayed(it, 300) }
+            if (ready) {
+                pending?.let { ui.removeCallbacks(it) }
+                pending = Runnable { select(i) }.also { ui.postDelayed(it, 300) }
+            }
         }
         catAd.onClick = { _, i -> select(i); grid.post { grid.getChildAt(0)?.findViewById<View>(R.id.card)?.requestFocus() } }
         catList.adapter = catAd
@@ -80,7 +83,11 @@ class VodActivity : BaseActivity() {
         if (mode == FAV) selCat = cats.indexOfFirst { itemsFor(it).isNotEmpty() }.coerceAtLeast(0)
         catAd.items = cats
         show()
-        catList.post { catList.getChildAt(selCat)?.requestFocus() }
+        // On attend que la liste soit dessinée avant de placer le focus sur la bonne catégorie
+        ui.postDelayed({
+            catList.getChildAt(selCat)?.requestFocus()
+            ui.postDelayed({ ready = true }, 400)
+        }, 350)
         popIn(catList, grid)
     }
 

@@ -27,7 +27,8 @@ import java.util.Locale
 /**
  * Lecteur plein écran.
  * Direct : haut/bas = zapper, chiffres = aller à une chaîne, OK = infos.
- * Films/séries : OK = pause, gauche/droite = -10 s / +10 s (maintenir = plus vite).
+ * Films/séries : OK = pause, gauche/droite = -10 s / +10 s (maintenir = plus vite),
+ *   ◀◀ ▶▶ = avance/retour rapide ×2 à ×32, bas = boutons à l'écran.
  * Menu ou appui long sur OK = options (audio, sous-titres, format d'image, infos du flux).
  */
 @OptIn(UnstableApi::class)
@@ -58,6 +59,32 @@ class PlayerActivity : BaseActivity() {
     }
     private val zapGo = Runnable { goToNumber() }
 
+    /* Avance / retour rapide (films, séries) : vitesse ×2 → ×32, l'image saute d'une image clé à l'autre. */
+    private lateinit var controls: View
+    private val btns by lazy { listOf(R.id.btnRew, R.id.btnBack10, R.id.btnPlay, R.id.btnFwd10, R.id.btnFf).map { findViewById<TextView>(it) } }
+    private var controlsOn = false
+    private var scan = 0  // > 0 avance, < 0 retour, 0 = lecture normale
+    private var scanPos = 0L  // position visée ; l'image suit dès qu'elle est prête
+    private val scanTick = object : Runnable {
+        override fun run() {
+            val p = player ?: return
+            if (scan == 0) return
+            val d = p.duration
+            val t = scanPos + scan * 500L
+            when {
+                t <= 0 -> { scanPos = 0; p.seekTo(0); stopScan() }
+                // Arrivé à la fin : on s'arrête 10 s avant, en pause (sinon le film se termine et le lecteur se ferme)
+                d > 0 && d != C.TIME_UNSET && t >= d - 10_000 -> { scanPos = (d - 10_000).coerceAtLeast(0); stopScan(resume = false); status(if (cur.type == Type.EPISODE) "Fin de l'épisode · OK pour lire" else "Fin du film · OK pour lire", 0) }
+                else -> {
+                    scanPos = t
+                    // On ne relance un saut que quand l'image précédente est affichée : l'image défile au lieu de rester figée
+                    if (p.playbackState != Player.STATE_BUFFERING) p.seekTo(t)
+                    updateProgress(); ui.postDelayed(this, 500)
+                }
+            }
+        }
+    }
+
     /** Chien de garde : flux bloqué trop longtemps en chargement → on le relance. */
     private val watchdog = Runnable {
         if (player?.playbackState == Player.STATE_BUFFERING && Prefs.reconnect) { status("Flux bloqué, relance…", 2000); restart() }
@@ -86,6 +113,12 @@ class PlayerActivity : BaseActivity() {
         pv.resizeMode = FkPlayer.resizeMode()
 
         findViewById<View>(R.id.optionsBtn).setOnClickListener { options() }
+        controls = findViewById(R.id.controls)
+        btns[0].setOnClickListener { scanBy(-1) }
+        btns[1].setOnClickListener { seekBy(-10_000) }
+        btns[2].setOnClickListener { togglePause() }
+        btns[3].setOnClickListener { seekBy(10_000) }
+        btns[4].setOnClickListener { scanBy(1) }
         findViewById<View>(R.id.root).setOnClickListener {
             if (top.visibility == View.VISIBLE && !isLive) togglePause() else showOverlay(true)
         }
@@ -105,7 +138,7 @@ class PlayerActivity : BaseActivity() {
     override fun onStop() {
         super.onStop()
         savePosition()
-        ui.removeCallbacks(ticker); ui.removeCallbacks(watchdog)
+        ui.removeCallbacks(ticker); ui.removeCallbacks(watchdog); ui.removeCallbacks(scanTick); scan = 0
         player?.release(); player = null; pv.player = null
     }
 
@@ -142,7 +175,10 @@ class PlayerActivity : BaseActivity() {
         if (isLive && it.icon != null) logo.load(it.icon) else logo.setImageDrawable(null)
         findViewById<TextView>(R.id.hint).text = if (isLive)
             "▲▼ zapper  ·  chiffres : n° de chaîne  ·  OK : infos  ·  Menu : options"
-        else "OK : pause  ·  ◀▶ -10 s / +10 s  ·  Menu : audio, sous-titres, format"
+        else "OK : pause  ·  ◀▶ -10 s / +10 s (maintenir = plus vite)  ·  ▼ boutons  ·  ◀◀ ▶▶ : avance rapide  ·  Menu : options"
+        controls.visibility = if (isLive) View.GONE else View.VISIBLE
+        if (isLive && controlsOn) focusControls(false)
+        updatePlayBtn()
         findViewById<TextView>(R.id.next).text = ""
         findViewById<TextView>(R.id.tStart).text = ""; findViewById<TextView>(R.id.tEnd).text = ""
         findViewById<ProgressBar>(R.id.prog).progress = 0
@@ -177,10 +213,11 @@ class PlayerActivity : BaseActivity() {
         } else {
             val d = p.duration
             if (d > 0 && d != C.TIME_UNSET) {
-                bar.progress = ((p.currentPosition * 1000) / d).toInt()
+                val pos = if (scan != 0) scanPos else p.currentPosition
+                bar.progress = ((pos * 1000) / d).toInt()
                 bar.secondaryProgress = ((p.bufferedPosition * 1000) / d).toInt()
-                findViewById<TextView>(R.id.tStart).text = duration(p.currentPosition)
-                findViewById<TextView>(R.id.tEnd).text = "-" + duration(d - p.currentPosition)
+                findViewById<TextView>(R.id.tStart).text = duration(pos)
+                findViewById<TextView>(R.id.tEnd).text = "-" + duration(d - pos)
             }
         }
     }
@@ -196,10 +233,11 @@ class PlayerActivity : BaseActivity() {
 
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
-            spinner.visibility = if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+            // Pendant l'avance rapide, chaque saut recharge l'image : pas de rond de chargement, on garde « ×8 » affiché
+            spinner.visibility = if (state == Player.STATE_BUFFERING && scan == 0) View.VISIBLE else View.GONE
             ui.removeCallbacks(watchdog)
             if (state == Player.STATE_BUFFERING && played) ui.postDelayed(watchdog, if (isLive) 15_000 else 30_000)
-            if (state == Player.STATE_READY) { retries = 0; played = true; status.visibility = View.GONE; techInfo() }
+            if (state == Player.STATE_READY) { retries = 0; played = true; if (scan == 0 && player?.playWhenReady == true) status.visibility = View.GONE; techInfo() }
             // Un flux direct ne « finit » jamais : si le serveur coupe, on relance
             if (state == Player.STATE_ENDED && isLive) {
                 if (retries < 12) { retries++; status("Reconnexion… ($retries)", 2000); ui.postDelayed({ restart() }, 800L * retries) }
@@ -282,8 +320,9 @@ class PlayerActivity : BaseActivity() {
                 top.alpha = 0f; bottom.alpha = 0f
                 top.animate().alpha(1f).setDuration(200).start(); bottom.animate().alpha(1f).setDuration(200).start()
             }
-            if (player?.isPlaying != false) ui.postDelayed(hide, 5000)
+            if (player?.isPlaying != false) ui.postDelayed(hide, if (controlsOn) 8000 else 5000)
         } else {
+            if (controlsOn) focusControls(false)
             top.animate().alpha(0f).setDuration(250).withEndAction { top.visibility = View.GONE }.start()
             bottom.animate().alpha(0f).setDuration(250).withEndAction { bottom.visibility = View.GONE }.start()
         }
@@ -291,9 +330,50 @@ class PlayerActivity : BaseActivity() {
 
     private fun togglePause() {
         val p = player ?: return
+        if (stopScan()) return
         p.playWhenReady = !p.playWhenReady
         status(if (p.playWhenReady) "Lecture" else "Pause", 1200)
+        updatePlayBtn()
         showOverlay(true)
+    }
+
+    private fun updatePlayBtn() {
+        btns[2].text = if (scan != 0 || player?.playWhenReady == false) "▶  Lecture" else "❚❚  Pause"
+    }
+
+    /** Boutons à l'écran : ▼ les active, ▲ ou Retour les quitte. */
+    private fun focusControls(on: Boolean) {
+        controlsOn = on
+        btns.forEach { it.isFocusable = on }
+        if (on) btns[2].requestFocus() else btns.forEach { it.clearFocus() }
+        if (on) showOverlay(true)
+    }
+
+    /** Chaque appui accélère : ×2, ×4, ×8, ×16, ×32. Changer de sens repart à ×2. */
+    private fun scanBy(dir: Int) {
+        val p = player ?: return
+        if (isLive) { showOverlay(true); return }
+        if (scan == 0) scanPos = p.currentPosition
+        scan = when {
+            scan == 0 || (scan > 0) != (dir > 0) -> 2 * dir
+            kotlin.math.abs(scan) < 32 -> scan * 2
+            else -> scan
+        }
+        p.setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+        p.playWhenReady = false
+        status(if (scan > 0) "▶▶  ×$scan" else "◀◀  ×${-scan}", 0)
+        ui.removeCallbacks(scanTick); ui.post(scanTick)
+        updatePlayBtn(); showOverlay(true)
+    }
+
+    /** Arrête l'avance rapide et reprend la lecture. Renvoie false si on n'était pas en avance rapide. */
+    private fun stopScan(resume: Boolean = true): Boolean {
+        if (scan == 0) return false
+        scan = 0; ui.removeCallbacks(scanTick)
+        player?.let { it.setSeekParameters(androidx.media3.exoplayer.SeekParameters.DEFAULT); it.seekTo(scanPos); it.playWhenReady = resume }
+        if (resume) status("Lecture", 1000)
+        updatePlayBtn(); showOverlay(true)
+        return true
     }
 
     private fun zapBy(d: Int) {
@@ -304,11 +384,12 @@ class PlayerActivity : BaseActivity() {
 
     private fun seekBy(ms: Long) {
         val p = player ?: return
+        stopScan()
         val d = p.duration
         var t = p.currentPosition + ms
         if (d > 0 && d != C.TIME_UNSET) t = t.coerceIn(0, d - 1000)
         p.seekTo(t.coerceAtLeast(0))
-        status((if (ms > 0) "+" else "") + "${ms / 1000} s", 700)
+        status((if (ms > 0) "+" else "") + (if (kotlin.math.abs(ms) >= 60_000) "${ms / 60_000} min" else "${ms / 1000} s"), 700)
         showOverlay(true); updateProgress()
     }
 
@@ -327,6 +408,17 @@ class PlayerActivity : BaseActivity() {
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         val code = e.keyCode
+        // Boutons à l'écran actifs : les flèches et OK servent à choisir / valider un bouton
+        if (controlsOn) {
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_BACK -> {
+                    if (e.action == KeyEvent.ACTION_DOWN) focusControls(false)
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_DPAD_DOWN -> { showOverlay(true); return super.dispatchKeyEvent(e) }
+            }
+        }
         // Appui long sur OK = options
         if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) {
             if (e.action == KeyEvent.ACTION_DOWN) {
@@ -344,11 +436,13 @@ class PlayerActivity : BaseActivity() {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP ->
                 { if (isLive) zapBy(-1) else showOverlay(true); return true }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN ->
-                { if (isLive) zapBy(1) else showOverlay(true); return true }
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND ->
-                { if (!isLive) seekBy(if (e.repeatCount > 4) -30_000 else -10_000) else showOverlay(true); return true }
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ->
-                { if (!isLive) seekBy(if (e.repeatCount > 4) 30_000 else 10_000) else showOverlay(true); return true }
+                { if (isLive) zapBy(1) else focusControls(true); return true }
+            // Flèches : -10 s / +10 s ; maintenues, les sauts grandissent (30 s, 1 min, 2 min)
+            KeyEvent.KEYCODE_DPAD_LEFT -> { if (!isLive) seekBy(-step(e)) else showOverlay(true); return true }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> { if (!isLive) seekBy(step(e)) else showOverlay(true); return true }
+            // Touches ◀◀ ▶▶ de la télécommande : avance / retour rapide
+            KeyEvent.KEYCODE_MEDIA_REWIND -> { if (e.repeatCount == 0) scanBy(-1); return true }
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { if (e.repeatCount == 0) scanBy(1); return true }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE, KeyEvent.KEYCODE_SPACE ->
                 { togglePause(); return true }
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_SETTINGS -> { options(); return true }
@@ -365,6 +459,10 @@ class PlayerActivity : BaseActivity() {
             return true
         }
         return super.dispatchKeyEvent(e)
+    }
+
+    private fun step(e: KeyEvent): Long = when {
+        e.repeatCount > 30 -> 120_000; e.repeatCount > 15 -> 60_000; e.repeatCount > 4 -> 30_000; else -> 10_000
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
