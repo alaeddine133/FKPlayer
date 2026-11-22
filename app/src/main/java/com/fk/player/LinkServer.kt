@@ -23,7 +23,7 @@ import kotlin.concurrent.thread
 class LinkServer(private val onReceive: (Map<String, String>) -> Unit) {
 
     var port = 0; private set
-    val token: String = (1..6).map { "abcdefghjkmnpqrstuvwxyz23456789".random() }.joinToString("")
+    val token: String = java.security.SecureRandom().let { r -> (1..6).map { "abcdefghjkmnpqrstuvwxyz23456789".random(kotlin.random.Random(r.nextLong())) } }.joinToString("")
     private var server: ServerSocket? = null
     @Volatile private var running = false
 

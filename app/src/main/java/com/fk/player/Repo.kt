@@ -170,6 +170,8 @@ object Repo {
             parseM3u(fetch("m3u", Prefs.m3u.trim(), preferCache))
         }
         synchronized(epgCache) { epgCache.clear() }
+        val old = System.currentTimeMillis() - 7 * 24 * 3600_000L
+        cacheDir().listFiles()?.forEach { if (it.name.startsWith("serie_") && it.lastModified() < old) it.delete() }
         loaded = true
     }
 
@@ -324,7 +326,7 @@ object Repo {
 
     fun streamUrl(it: Item): String {
         it.url?.let { u -> return u }
-        val u = enc(Prefs.user); val p = enc(Prefs.pass)
+        val u = Uri.encode(Prefs.user); val p = Uri.encode(Prefs.pass)
         return when (it.type) {
             Type.LIVE -> "${base()}/live/$u/$p/${it.id}.${Prefs.liveFormat}"
             Type.MOVIE -> "${base()}/movie/$u/$p/${it.id}.${it.ext ?: "mp4"}"

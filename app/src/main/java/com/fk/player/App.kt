@@ -125,7 +125,10 @@ object Prefs {
     fun dur(key: String): Long = sp.getLong("d_$key", 0L)
     fun savePos(key: String, pos: Long, dur: Long) {
         if (dur > 0 && (pos < 30_000 || pos > dur - 90_000)) clearPos(key)
-        else sp.edit().putLong("p_$key", pos).putLong("d_$key", dur).putLong("t_$key", System.currentTimeMillis()).apply()
+        else {
+            sp.edit().putLong("p_$key", pos).putLong("d_$key", dur).putLong("t_$key", System.currentTimeMillis()).apply()
+            resumeKeys().drop(100).forEach { clearPos(it) }
+        }
     }
     fun clearPos(key: String) = sp.edit().remove("p_$key").remove("d_$key").remove("t_$key").apply()
     fun progress(key: String): Int {
