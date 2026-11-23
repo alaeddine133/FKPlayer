@@ -13,7 +13,15 @@ class App : Application(), ImageLoaderFactory {
         super.onCreate()
         Prefs.init(this)
         Repo.init(this)
+        // Plantage : on garde la cause pour l'afficher au prochain démarrage (pas d'adb sur la box)
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try { crashFile(this).writeText("${java.util.Date()}\n${android.util.Log.getStackTraceString(e)}") } catch (_: Throwable) { }
+            prev?.uncaughtException(t, e)
+        }
     }
+
+    companion object { fun crashFile(c: Context) = java.io.File(c.filesDir, "crash.txt") }
 
     /** Images (logos, affiches) : cache mémoire + 150 Mo sur disque, format léger pour les box modestes. */
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
@@ -47,7 +55,9 @@ data class Item(
     val num: Int = 0,
     val rating: String? = null,
     val epgId: String? = null,
-    val sub: String? = null
+    val sub: String? = null,
+    val archive: Int = 0,  // jours de replay disponibles (chaînes)
+    val added: Long = 0    // date d'ajout sur le serveur (secondes)
 ) {
     val key: String get() = "$type:$id"
 }
@@ -104,6 +114,7 @@ object Prefs {
     var reconnect: Boolean get() = sp.getBoolean("reco", true); set(v) = putB("reco", v)
     var autoNext: Boolean get() = sp.getBoolean("next", true); set(v) = putB("next", v)
     var frFirst: Boolean get() = sp.getBoolean("frfirst", true); set(v) = putB("frfirst", v)
+    var byDate: Boolean get() = sp.getBoolean("bydate", true); set(v) = putB("bydate", v)
 
     // Dernière chaîne regardée
     var lastLiveId: String get() = str("lastId"); set(v) = putS("lastId", v)
@@ -124,6 +135,7 @@ object Prefs {
     fun pos(key: String): Long = sp.getLong("p_$key", 0L)
     fun dur(key: String): Long = sp.getLong("d_$key", 0L)
     fun savePos(key: String, pos: Long, dur: Long) {
+        if (key.contains(":rp_")) return  // replays : ne prennent pas la place des films en cours
         if (dur > 0 && (pos < 30_000 || pos > dur - 90_000)) clearPos(key)
         else {
             sp.edit().putLong("p_$key", pos).putLong("d_$key", dur).putLong("t_$key", System.currentTimeMillis()).apply()

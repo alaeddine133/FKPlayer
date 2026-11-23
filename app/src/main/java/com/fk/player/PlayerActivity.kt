@@ -156,6 +156,9 @@ class PlayerActivity : BaseActivity() {
         ui.post(ticker)
     }
 
+    // Sauvegarde dès la pause : l'écran précédent se réaffiche avant onStop et doit voir « Reprendre à … »
+    override fun onPause() { super.onPause(); savePosition() }
+
     override fun onStop() {
         super.onStop()
         savePosition()
@@ -185,6 +188,7 @@ class PlayerActivity : BaseActivity() {
         val it = cur
         findViewById<TextView>(R.id.topTitle).text = when {
             isLive -> "Direct"
+            it.id.startsWith("rp_") -> "Replay"
             it.type == Type.EPISODE -> PlayQueue.seriesName ?: "Série"
             else -> "Film"
         }
@@ -229,6 +233,8 @@ class PlayerActivity : BaseActivity() {
             if (s.isEmpty()) return
             lifecycleScope.launch {
                 val e = Repo.shortEpg(cur).firstOrNull() ?: return@launch
+                // Émission terminée : on affiche la suivante (titre + heures), pas seulement la barre
+                if (bar.tag != e.start) { bar.tag = e.start; findViewById<TextView>(R.id.title).text = e.title; findViewById<TextView>(R.id.tStart).text = hhmm(e.start); findViewById<TextView>(R.id.tEnd).text = hhmm(e.end) }
                 val span = (e.end - e.start).coerceAtLeast(1)
                 bar.progress = (((System.currentTimeMillis() - e.start) * 1000) / span).toInt()
             }

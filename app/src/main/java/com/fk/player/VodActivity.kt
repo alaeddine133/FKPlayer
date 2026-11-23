@@ -150,6 +150,6 @@ class VodActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::gridAd.isInitialized) { gridAd.notifyDataSetChanged(); catAd.notifyDataSetChanged() }
+        if (::gridAd.isInitialized) { gridAd.notifyItemRangeChanged(0, gridAd.itemCount); catAd.notifyItemRangeChanged(0, catAd.itemCount) }
     }
 }

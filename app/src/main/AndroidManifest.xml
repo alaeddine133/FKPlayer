@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -34,6 +35,7 @@
         <activity android:name=".LiveActivity" android:screenOrientation="sensorLandscape" />
         <activity android:name=".VodActivity" android:screenOrientation="sensorLandscape" />
         <activity android:name=".SeriesActivity" android:screenOrientation="sensorLandscape" />
+        <activity android:name=".DetailActivity" android:screenOrientation="sensorLandscape" />
         <activity android:name=".SettingsActivity" android:screenOrientation="sensorLandscape" />
         <activity
             android:name=".SearchActivity"
@@ -44,5 +46,12 @@
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:theme="@style/Theme.FK.Player" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/files" />
+        </provider>
     </application>
 </manifest>

@@ -62,17 +62,22 @@ class SeriesActivity : BaseActivity() {
         }
         epAd.onClick = { _, i ->
             val list = epAd.items.map { Repo.episodeItem(it, cover) }
-            play(list, i, serie.name)
+            playChoice(list, i, serie.name)
         }
         el.adapter = epAd
+        similarRow(findViewById(R.id.similar), serie, 90)
+        findViewById<View>(R.id.simTitle).visibility = findViewById<RecyclerView>(R.id.similar).visibility
 
         lifecycleScope.launch {
             try {
                 val info = Repo.seriesInfo(serie.id)
                 findViewById<View>(R.id.loading).visibility = View.GONE
-                findViewById<TextView>(R.id.plot).text = info.plot ?: ""
-                findViewById<TextView>(R.id.meta).text = listOfNotNull(info.year, info.genre, serie.rating?.let { "★ $it" }).joinToString("  ·  ")
-                if (cover == null && info.cover != null) { cover = info.cover; findViewById<ImageView>(R.id.cover).load(info.cover) }
+                findViewById<TextView>(R.id.plot).text = info.info.plot ?: ""
+                findViewById<TextView>(R.id.meta).text = listOfNotNull(info.info.year, info.info.genre, serie.rating?.let { "★ $it" }).joinToString("  ·  ")
+                if (cover == null && info.info.cover != null) { cover = info.info.cover; findViewById<ImageView>(R.id.cover).load(info.info.cover) }
+                info.info.backdrop?.let { findViewById<ImageView>(R.id.backdrop).load(it) { crossfade(true) } }
+                findViewById<TextView>(R.id.cast).text = listOfNotNull(info.info.director?.let { "Réalisation : $it" }, info.info.cast?.let { "Avec : $it" }).joinToString("\n")
+                info.info.trailer?.let { t -> findViewById<View>(R.id.trailerBtn).apply { visibility = View.VISIBLE; setOnClickListener { trailer(t) } } }
                 seasons = info.seasons; seasonKeys = seasons.keys.sorted()
                 if (seasonKeys.isEmpty()) { findViewById<TextView>(R.id.plot).text = "Aucun épisode disponible pour cette série."; return@launch }
                 // Saison de l'épisode commencé le plus récemment
@@ -101,6 +106,6 @@ class SeriesActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::epAd.isInitialized) epAd.notifyDataSetChanged()
+        if (::epAd.isInitialized) epAd.notifyItemRangeChanged(0, epAd.itemCount)  // garde le focus sur l'épisode
     }
 }

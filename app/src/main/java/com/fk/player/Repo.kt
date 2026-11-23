@@ -176,7 +176,10 @@ object Repo {
     }
 
     /** Remplace toutes les listes d'un coup et prépare les index. */
-    private fun publish(lc: List<Category>, vc: List<Category>, sc: List<Category>, l: List<Item>, v: List<Item>, s: List<Item>) {
+    private fun publish(lc: List<Category>, vc: List<Category>, sc: List<Category>, l: List<Item>, v0: List<Item>, s0: List<Item>) {
+        // Films et séries : les derniers ajoutés en premier (sinon ordre du serveur)
+        val v = if (Prefs.byDate) v0.sortedByDescending { it.added } else v0
+        val s = if (Prefs.byDate) s0.sortedByDescending { it.added } else s0
         // Les éléments dont la catégorie n'est pas déclarée vont tous dans « Autres »
         fun group(items: List<Item>, cats: List<Category>): Map<String, List<Item>> {
             val ids = cats.mapTo(HashSet()) { it.id }
@@ -239,7 +242,8 @@ object Repo {
         val out = ArrayList<Item>()
         objects(f) { o ->
             out += Item(Type.LIVE, o.s("stream_id"), o.s("name").trim(), o.s("stream_icon").ifBlank { null },
-                o.s("category_id"), num = o.s("num").toIntOrNull() ?: (out.size + 1), epgId = o.s("epg_channel_id").ifBlank { null })
+                o.s("category_id"), num = o.s("num").toIntOrNull() ?: (out.size + 1), epgId = o.s("epg_channel_id").ifBlank { null },
+                archive = if (o.s("tv_archive") == "1") o.s("tv_archive_duration").toIntOrNull()?.coerceAtLeast(1) ?: 1 else 0)
         }
         return out
     }
@@ -248,7 +252,8 @@ object Repo {
         val out = ArrayList<Item>()
         objects(f) { o ->
             out += Item(Type.MOVIE, o.s("stream_id"), o.s("name").trim(), o.s("stream_icon").ifBlank { null },
-                o.s("category_id"), ext = o.s("container_extension").ifBlank { "mp4" }, rating = rating(o.s("rating")))
+                o.s("category_id"), ext = o.s("container_extension").ifBlank { "mp4" }, rating = rating(o.s("rating")),
+                added = o.s("added").toLongOrNull() ?: 0)
         }
         return out
     }
@@ -257,7 +262,7 @@ object Repo {
         val out = ArrayList<Item>()
         objects(f) { o ->
             out += Item(Type.SERIES, o.s("series_id"), o.s("name").trim(), o.s("cover").ifBlank { null },
-                o.s("category_id"), rating = rating(o.s("rating")))
+                o.s("category_id"), rating = rating(o.s("rating")), added = o.s("last_modified").toLongOrNull() ?: 0)
         }
         return out
     }
@@ -282,7 +287,40 @@ object Repo {
 
     /* ---------- Séries ---------- */
 
-    data class SeriesInfo(val plot: String?, val cover: String?, val genre: String?, val year: String?, val seasons: Map<Int, List<Episode>>)
+    /** Fiche d'un film ou d'une série (champs vides si le serveur ne les donne pas). */
+    data class Info(
+        val plot: String?, val cover: String?, val backdrop: String?, val genre: String?, val year: String?,
+        val cast: String?, val director: String?, val trailer: String?, val duration: String?
+    )
+
+    private fun info(o: JSONObject?): Info {
+        fun f(vararg k: String) = k.firstNotNullOfOrNull { o?.s(it)?.trim()?.ifBlank { null } }
+        val bd = o?.optJSONArray("backdrop_path")?.optString(0)?.ifBlank { null } ?: f("backdrop_path")
+        return Info(
+            f("plot", "description"), f("cover", "movie_image", "cover_big"), bd, f("genre"),
+            f("releaseDate", "releasedate", "release_date")?.take(4), f("cast", "actors"), f("director"),
+            f("youtube_trailer", "trailer")?.let { ytId(it) }, f("duration")
+        )
+    }
+
+    /** Identifiant YouTube depuis un id seul ou une adresse complète. */
+    fun ytId(s: String): String? {
+        val id = when {
+            "v=" in s -> s.substringAfter("v=").substringBefore('&')
+            "youtu.be/" in s -> s.substringAfter("youtu.be/").substringBefore('?')
+            "/embed/" in s -> s.substringAfter("/embed/").substringBefore('?')
+            else -> s
+        }.trim()
+        return id.takeIf { it.matches(Regex("[\\w-]{6,20}")) }
+    }
+
+    suspend fun vodInfo(id: String): Info? {
+        if (!isXtream) return null
+        return try { withContext(Dispatchers.Default) { info(JSONObject(get(api("get_vod_info", "&vod_id=$id"))).optJSONObject("info")) } }
+        catch (e: Exception) { null }
+    }
+
+    data class SeriesInfo(val info: Info, val seasons: Map<Int, List<Episode>>)
 
     suspend fun seriesInfo(id: String): SeriesInfo = withContext(Dispatchers.Default) {
         val o = JSONObject(fetch("serie_$id", api("get_series_info", "&series_id=$id"), false).readText())
@@ -316,11 +354,34 @@ object Repo {
             }
         }
         map.values.forEach { l -> l.sortBy { it.num } }
-        SeriesInfo(
-            info?.s("plot")?.ifBlank { null }, info?.s("cover")?.ifBlank { null },
-            info?.s("genre")?.ifBlank { null }, info?.s("releaseDate")?.take(4)?.ifBlank { null }, map
-        )
+        SeriesInfo(info(info), map)
     }
+
+    /* ---------- Replay des chaînes (timeshift Xtream) ---------- */
+
+    data class Replay(val title: String, val start: Long, val end: Long, val url: String)
+
+    /** Émissions passées encore disponibles en replay, de la plus récente à la plus ancienne. */
+    suspend fun replays(ch: Item): List<Replay> = withContext(Dispatchers.Default) {
+        if (!isXtream || ch.archive <= 0) return@withContext emptyList()
+        val a = JSONObject(get(api("get_simple_data_table", "&stream_id=${ch.id}"))).optJSONArray("epg_listings") ?: JSONArray()
+        val now = System.currentTimeMillis(); val from = now - ch.archive * 86_400_000L
+        val u = Uri.encode(Prefs.user); val p = Uri.encode(Prefs.pass)
+        val local = java.text.SimpleDateFormat("yyyy-MM-dd:HH-mm", java.util.Locale.US)
+        List(a.length()) { a.optJSONObject(it) }.mapNotNull { e ->
+            e ?: return@mapNotNull null
+            val s = (e.s("start_timestamp").toLongOrNull() ?: return@mapNotNull null) * 1000
+            val t = (e.s("stop_timestamp").toLongOrNull() ?: return@mapNotNull null) * 1000
+            if (t > now || s < from || e.s("has_archive") == "0") return@mapNotNull null
+            val st = tsStart(e.s("start")) ?: local.format(java.util.Date(s))
+            val min = ((t - s) / 60_000).coerceAtLeast(1)
+            Replay(b64(e.s("title")), s, t, "${base()}/timeshift/$u/$p/$min/$st/${ch.id}.ts")
+        }.sortedByDescending { it.start }
+    }
+
+    /** « 2026-11-23 20:45:00 » (heure du serveur, que le timeshift attend dans son propre fuseau) → « 2026-11-23:20-45 ». */
+    fun tsStart(start: String): String? =
+        Regex("""^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})""").find(start)?.destructured?.let { (d, h, m) -> "$d:$h-$m" }
 
     /* ---------- URL de lecture ---------- */
 
@@ -376,11 +437,19 @@ object Repo {
     private val movieRe = Regex("""\.(mp4|mkv|avi|mov|m4v)(\?|$)""")
 
     private fun parseM3u(f: File) {
+        val p = f.useLines { m3u(it) }
+        publish(p.lc, p.mc, p.sc, p.l, p.m, p.s)
+    }
+
+    class M3u(val lc: List<Category>, val mc: List<Category>, val sc: List<Category>, val l: List<Item>, val m: List<Item>, val s: List<Item>)
+
+    /** Range chaque ligne de la playlist en direct, film ou épisode (séparé de la lecture du fichier pour être testé). */
+    fun m3u(lines: Sequence<String>): M3u {
         var isM3u = false
         val l = ArrayList<Item>(); val m = ArrayList<Item>(); val s = ArrayList<Item>()
         val lc = LinkedHashMap<String, Category>(); val mc = LinkedHashMap<String, Category>(); val sc = LinkedHashMap<String, Category>()
-        var name = ""; var logo: String? = null; var group = "Autres"; var n = 0
-        f.useLines { lines -> lines.forEach { raw ->
+        var name = ""; var logo: String? = null; var group = "Autres"
+        lines.forEach { raw ->
             val line = raw.trim()
             if (line.startsWith("#EXTM3U")) isM3u = true
             if (line.startsWith("#EXTINF")) {
@@ -390,9 +459,8 @@ object Repo {
                 logo = attrs["tvg-logo"]?.ifBlank { null }
                 group = attrs["group-title"]?.ifBlank { null } ?: "Autres"
             } else if (line.isNotEmpty() && !line.startsWith("#")) {
-                n++
                 val low = line.lowercase()
-                val id = "m3u$n"
+                val id = "m3u" + line.hashCode().toUInt().toString(36)  // stable : ne bouge pas si la playlist change d'ordre
                 when {
                     low.contains("/series/") -> { sc.getOrPut(group) { Category(group, group) }; s += Item(Type.EPISODE, id, name, logo, group, url = line) }
                     low.contains("/movie/") || movieRe.containsMatchIn(low) -> { mc.getOrPut(group) { Category(group, group) }; m += Item(Type.MOVIE, id, name, logo, group, url = line) }
@@ -400,9 +468,9 @@ object Repo {
                 }
                 name = ""; logo = null; group = "Autres"
             }
-        } }
+        }
         if (!isM3u) throw IOException("ce lien n'est pas une playlist M3U")
-        publish(lc.values.toList(), mc.values.toList(), sc.values.toList(), l, m, s)
+        return M3u(lc.values.toList(), mc.values.toList(), sc.values.toList(), l, m, s)
     }
 
     /* ---------- Recherche ---------- */

@@ -81,6 +81,7 @@ class LiveActivity : BaseActivity() {
         chList.adapter = chAd
 
         findViewById<View>(R.id.preview).setOnClickListener { current?.let { c -> fullscreen(chans.indexOfFirst { it.id == c.id }) } }
+        findViewById<View>(R.id.replayBtn).setOnClickListener { current?.let { replay(it) } }
 
         // Ouvre la dernière catégorie / chaîne regardée
         val lastCat = cats.indexOfFirst { it.id == Prefs.lastLiveCat }
@@ -173,6 +174,10 @@ class LiveActivity : BaseActivity() {
         findViewById<TextView>(R.id.pvTitle).text = c.name
         findViewById<View>(R.id.pvTimes).visibility = View.INVISIBLE
         findViewById<TextView>(R.id.next1).text = if (Repo.isXtream) "Chargement du guide…" else "Guide TV non fourni par la playlist M3U"
+        findViewById<TextView>(R.id.replayBtn).apply {
+            visibility = if (c.archive > 0 && Repo.isXtream) View.VISIBLE else View.GONE
+            text = "⟲  Replay · ${c.archive} jour" + if (c.archive > 1) "s" else ""
+        }
         findViewById<TextView>(R.id.next2).text = ""
         lifecycleScope.launch {
             val epg = Repo.shortEpg(c)
@@ -193,6 +198,23 @@ class LiveActivity : BaseActivity() {
         }
     }
 
+    /** Liste des émissions passées de la chaîne, puis lecture comme un film (avance / retour possibles). */
+    private fun replay(c: Item) {
+        toast("Chargement du replay…")
+        lifecycleScope.launch {
+            val list = try { Repo.replays(c) } catch (e: Exception) { emptyList() }
+            if (list.isEmpty()) { toast("Aucune émission en replay pour cette chaîne"); return@launch }
+            val day = java.text.SimpleDateFormat("EEE dd/MM", java.util.Locale.FRANCE)
+            androidx.appcompat.app.AlertDialog.Builder(this@LiveActivity)
+                .setTitle("Replay · ${c.name}")
+                .setItems(list.map { "${day.format(java.util.Date(it.start))}  ${hhmm(it.start)}   ${it.title}" }.toTypedArray()) { _, w ->
+                    val r = list[w]
+                    player?.stop(); current = null
+                    play(listOf(Item(Type.MOVIE, "rp_${c.id}_${r.start}", r.title, c.icon, "", url = r.url, sub = "Replay · ${c.name} · ${day.format(java.util.Date(r.start))} ${hhmm(r.start)}")), 0)
+                }.show()
+        }
+    }
+
     private fun fullscreen(i: Int) {
         if (i < 0) return
         player?.stop()
@@ -206,7 +228,7 @@ class LiveActivity : BaseActivity() {
         if (Repo.loaded && ::chAd.isInitialized) {
             val last = chans.firstOrNull { it.id == Prefs.lastLiveId }
             if (last != null && player == null) ui.postDelayed({ if (player == null) preview(last) }, 1500)
-            chAd.notifyDataSetChanged()
+            chAd.notifyItemRangeChanged(0, chAd.itemCount)
         }
     }
 

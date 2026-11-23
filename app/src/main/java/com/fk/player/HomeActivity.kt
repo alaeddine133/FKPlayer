@@ -42,6 +42,14 @@ class HomeActivity : BaseActivity() {
 
         live.requestFocus()
 
+        // Dernier plantage : affiché une fois pour pouvoir le photographier et nous l'envoyer
+        val crash = App.crashFile(this)
+        if (crash.exists()) {
+            val txt = crash.readText().lines().take(14).joinToString("\n"); crash.delete()
+            androidx.appcompat.app.AlertDialog.Builder(this).setTitle("FK PLAYER s'est fermé la dernière fois")
+                .setMessage("Prends une photo de ce message pour la correction :\n\n$txt").setPositiveButton("OK", null).show()
+        }
+
         // Ouvert depuis les listes gardées sur la box : mise à jour discrète en arrière-plan
         if (intent.getBooleanExtra("refresh", false) && Repo.cacheAge() > 6 * 3600_000L) {
             lifecycleScope.launch {
@@ -53,6 +61,7 @@ class HomeActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         refreshTexts()
+        Updater.check(this)
     }
 
     private fun refreshTexts() {

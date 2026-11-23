@@ -15,6 +15,10 @@ https://github.com/alaeddine133/FKPlayer/raw/main/FKPlayer.apk
 - Films et séries avec reprise de lecture, épisode suivant automatique
 - Ma liste (favoris), recherche instantanée
 - Lecteur ExoPlayer : zapping, n° de chaîne, pistes audio, sous-titres, format d'image, reconnexion automatique
+- Fiche film et série : résumé, acteurs, bande-annonce, titres similaires, reprendre ou depuis le début
+- Replay des chaînes (si le fournisseur le propose)
+- Films et séries rangés par date d'ajout
+- Mises à jour automatiques
 - Catégories françaises en premier
 
 Android 5.0 et plus.

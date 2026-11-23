@@ -139,6 +139,7 @@ class LoginActivity : BaseActivity() {
                 startActivity(Intent(this@LoginActivity, HomeActivity::class.java).putExtra("refresh", Repo.fromCache))
                 finish()
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e  // écran quitté : ne pas relancer le serveur QR
                 // On garde le compte enregistré : il suffit de réessayer si c'était une coupure réseau
                 showForm("Connexion impossible : ${e.message ?: "erreur réseau"}")
             }

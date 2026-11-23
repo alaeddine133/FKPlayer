@@ -223,10 +223,25 @@
                         android:textSize="12sp" />
 
                     <TextView
+                        android:id="@+id/replayBtn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="34dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/btn_toggle"
+                        android:focusable="true"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:paddingLeft="14dp"
+                        android:paddingRight="14dp"
+                        android:textColor="@color/btn_text"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
+                    <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="OK : plein écran  ·  Appui long / Menu : favori"
+                        android:text="OK : plein écran  ·  Appui long / Menu : favori  ·  Replay : ▶ puis ▼"
                         android:textColor="@color/muted"
                         android:textSize="10sp" />
                 </LinearLayout>

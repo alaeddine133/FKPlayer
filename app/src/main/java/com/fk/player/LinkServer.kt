@@ -23,7 +23,7 @@ import kotlin.concurrent.thread
 class LinkServer(private val onReceive: (Map<String, String>) -> Unit) {
 
     var port = 0; private set
-    val token: String = java.security.SecureRandom().let { r -> (1..6).map { "abcdefghjkmnpqrstuvwxyz23456789".random(kotlin.random.Random(r.nextLong())) } }.joinToString("")
+    val token: String = java.security.SecureRandom().let { r -> (1..6).map { "abcdefghjkmnpqrstuvwxyz23456789".let { c -> c[r.nextInt(c.length)] } } }.joinToString("")
     private var server: ServerSocket? = null
     @Volatile private var running = false
 
@@ -38,7 +38,8 @@ class LinkServer(private val onReceive: (Map<String, String>) -> Unit) {
             server = s; running = true
             thread(name = "fk-link", isDaemon = true) {
                 while (running) {
-                    try { val c = s.accept(); thread(isDaemon = true) { handle(c) } } catch (e: Exception) { if (!running) break }
+                    // Une erreur ici (téléphone qui laisse la connexion ouverte → délai dépassé) fermait toute l'appli
+                    try { val c = s.accept(); thread(isDaemon = true) { try { handle(c) } catch (_: Exception) { } } } catch (e: Exception) { if (!running) break }
                 }
             }
             true

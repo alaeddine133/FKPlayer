@@ -67,9 +67,35 @@
                 android:layout_marginTop="8dp"
                 android:ellipsize="end"
                 android:lineSpacingExtra="2dp"
-                android:maxLines="7"
+                android:maxLines="5"
                 android:textColor="@color/text2"
                 android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/cast"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:maxLines="3"
+                android:textColor="@color/text"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/trailerBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/btn_toggle"
+                android:focusable="true"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp"
+                android:text="Bande-annonce"
+                android:textColor="@color/btn_text"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/favBtn"
@@ -115,7 +141,22 @@
                 android:layout_marginTop="8dp"
                 android:layout_weight="1"
                 android:clipToPadding="false"
-                android:paddingBottom="24dp"
+                android:paddingBottom="8dp"
+                android:scrollbars="none" />
+
+            <TextView
+                android:id="@+id/simTitle"
+                style="@style/H1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Séries similaires"
+                android:textSize="13sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/similar"
+                android:layout_width="match_parent"
+                android:layout_height="165dp"
+                android:clipToPadding="false"
                 android:scrollbars="none" />
         </LinearLayout>
     </LinearLayout>

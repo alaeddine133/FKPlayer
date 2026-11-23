@@ -9,7 +9,9 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.lifecycleScope
 import coil.load
+import kotlinx.coroutines.launch
 
 /** Recherche instantanée dans les chaînes, films et séries (sans accents, sans majuscules). */
 class SearchActivity : BaseActivity() {
@@ -69,10 +71,14 @@ class SearchActivity : BaseActivity() {
     }
 
     private fun run() {
-        val q = query.text.toString()
-        val res = Repo.search(q, types)
-        ad.items = res
-        empty.visibility = if (res.isEmpty()) View.VISIBLE else View.GONE
-        empty.text = if (q.trim().length < 2) "Tape au moins 2 lettres" else "Aucun résultat pour « ${q.trim()} »"
+        val q = query.text.toString(); val t = types.toSet()
+        // Hors du fil d'affichage : la saisie reste fluide même avec 100 000 titres
+        lifecycleScope.launch {
+            val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Repo.search(q, t) }
+            if (query.text.toString() != q) return@launch  // une frappe plus récente arrive
+            ad.items = res
+            empty.visibility = if (res.isEmpty()) View.VISIBLE else View.GONE
+            empty.text = if (q.trim().length < 2) "Tape au moins 2 lettres" else "Aucun résultat pour « ${q.trim()} »"
+        }
     }
 }

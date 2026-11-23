@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -187,11 +188,50 @@ open class BaseActivity : AppCompatActivity() {
         startActivity(Intent(this, PlayerActivity::class.java))
     }
 
-    /** Ouvre un contenu : film/chaîne/épisode → lecteur ; série → fiche série. */
+    /** Contenu déjà commencé : on demande « reprendre » ou « depuis le début ». */
+    fun playChoice(list: List<Item>, i: Int, series: String? = null) {
+        val it = list[i]; val p = Prefs.pos(it.key)
+        if (p <= 0) { play(list, i, series); return }
+        androidx.appcompat.app.AlertDialog.Builder(this).setTitle(it.name)
+            .setItems(arrayOf("▶  Reprendre à ${duration(p)}", "↺  Depuis le début")) { _, w ->
+                if (w == 1) Prefs.clearPos(it.key)
+                play(list, i, series)
+            }.show()
+    }
+
+    /** Bande-annonce dans l'appli YouTube de la box. */
+    fun trailer(id: String) {
+        val tries = listOf("vnd.youtube:$id", "https://www.youtube.com/watch?v=$id")
+        for (u in tries) try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(u))); return } catch (_: Exception) { }
+        toast("Installe l'appli YouTube pour voir les bandes-annonces")
+    }
+
+    /** Rangée d'affiches « Titres similaires » (même catégorie). */
+    fun similarRow(rv: RecyclerView, of: Item, width: Int) {
+        val pool = when (of.type) { Type.SERIES -> Repo.serByCat; else -> Repo.vodByCat }[of.catId] ?: emptyList()
+        val list = pool.filter { it.id != of.id }.take(30)
+        rv.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false)
+        val ad = Adapter<Item>(R.layout.item_poster, 1.07f) { v, x, _ ->
+            v.layoutParams = v.layoutParams.apply { this.width = dp(width) }
+            v.findViewById<TextView>(R.id.name).text = x.name
+            v.findViewById<TextView>(R.id.ini).text = x.name.take(40)
+            val img = v.findViewById<RatioImageView>(R.id.img)
+            if (x.icon != null) img.load(x.icon) { crossfade(true) } else img.setImageDrawable(null)
+            v.findViewById<TextView>(R.id.badge).let { b -> if (x.rating != null) { b.text = "★ ${x.rating}"; b.visibility = View.VISIBLE } else b.visibility = View.GONE }
+        }
+        ad.focusTarget = R.id.card
+        ad.onClick = { _, i -> open(list, i); finish() }
+        ad.items = list
+        rv.adapter = ad
+        rv.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    /** Ouvre un contenu : chaîne/épisode → lecteur ; film → fiche film ; série → fiche série. */
     fun open(list: List<Item>, index: Int) {
         val it = list[index]
         when (it.type) {
             Type.SERIES -> startActivity(Intent(this, SeriesActivity::class.java).putExtra("id", it.id))
+            Type.MOVIE -> if (Repo.byKey(it.key) != null) startActivity(Intent(this, DetailActivity::class.java).putExtra("key", it.key)) else playChoice(listOf(it), 0)
             Type.LIVE -> play(list.filter { x -> x.type == Type.LIVE }, list.filter { x -> x.type == Type.LIVE }.indexOf(it))
             else -> play(listOf(it), 0)
         }
