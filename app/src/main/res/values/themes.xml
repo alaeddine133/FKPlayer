@@ -24,6 +24,18 @@
         <item name="android:textColor">@color/text</item>
         <item name="android:textColorSecondary">@color/text2</item>
         <item name="android:listSelector">@drawable/dialog_item</item>
+        <item name="buttonBarPositiveButtonStyle">@style/FkDialogBtn</item>
+        <item name="buttonBarNegativeButtonStyle">@style/FkDialogBtn</item>
+        <item name="buttonBarNeutralButtonStyle">@style/FkDialogBtn</item>
+    </style>
+
+    <!-- Boutons des fenêtres : le bouton choisi à la télécommande se voit (fond clair) -->
+    <style name="FkDialogBtn" parent="Widget.AppCompat.Button.ButtonBar.AlertDialog">
+        <item name="android:background">@drawable/btn_toggle</item>
+        <item name="android:textColor">@color/btn_text</item>
+        <item name="android:layout_marginLeft">8dp</item>
+        <item name="android:paddingLeft">18dp</item>
+        <item name="android:paddingRight">18dp</item>
     </style>
 
     <style name="H1">
@@ -62,7 +74,7 @@
         <item name="android:paddingRight">16dp</item>
         <item name="android:gravity">center</item>
         <item name="android:background">@drawable/btn_toggle</item>
-        <item name="android:textColor">@color/text</item>
+        <item name="android:textColor">@color/btn_text</item>
         <item name="android:textSize">13sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:clickable">true</item>

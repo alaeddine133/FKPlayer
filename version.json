@@ -1,6 +1,6 @@
 {
-  "code": 8,
-  "name": "1.7",
+  "code": 9,
+  "name": "1.8",
   "url": "https://github.com/alaeddine133/FKPlayer/raw/main/FKPlayer.apk",
-  "notes": "Fiche film et série (résumé, acteurs, bande-annonce, similaires, reprendre ou depuis le début), replay des chaînes, tri par date d'ajout, correction de la fermeture au scan du QR code, mises à jour automatiques. Playlists M3U : refaire ses favoris une fois."
+  "notes": "Boutons plus lisibles : le bouton sélectionné s'affiche en clair dans les fenêtres (reprendre, mise à jour) et sur les fiches."
 }
