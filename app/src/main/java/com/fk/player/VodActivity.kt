@@ -5,6 +5,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -49,6 +50,16 @@ class VodActivity : BaseActivity() {
             MOVIES -> listOf(Category(K_FAV, "Ma liste"), Category(K_RESUME, "Reprendre"), Category(K_ALL, "Tous les films")) + Repo.vodCats
             SERIES -> listOf(Category(K_FAV, "Ma liste"), Category(K_ALL, "Toutes les séries")) + Repo.serCats
             else -> listOf(Category(K_FILMS, "Films"), Category(K_SER, "Séries"), Category(K_CH, "Chaînes"))
+        }
+
+        val sortBtn = findViewById<TextView>(R.id.sortBtn)
+        sortBtn.text = "⇅ " + Repo.sortNames[Prefs.sort]
+        sortBtn.setOnClickListener {
+            AlertDialog.Builder(this).setTitle("Trier par")
+                .setSingleChoiceItems(Repo.sortNames, Prefs.sort) { d, w ->
+                    d.dismiss()
+                    if (w != Prefs.sort) { Prefs.sort = w; sortBtn.text = "⇅ " + Repo.sortNames[w]; show() }
+                }.show()
         }
 
         val catList = findViewById<RecyclerView>(R.id.cats).fast()
@@ -114,8 +125,19 @@ class VodActivity : BaseActivity() {
         show()
     }
 
+    // Dernier tri calculé par catégorie : changer de catégorie au focus reste instantané
+    private val sortCache = HashMap<String, Pair<List<Item>, List<Item>>>()
+
+    private fun sortedFor(c: Category): List<Item> {
+        val raw = itemsFor(c)
+        if (c.id == K_RESUME) return raw  // « Reprendre » garde l'ordre du dernier regardé
+        val k = "${c.id}|${Prefs.sort}"
+        sortCache[k]?.let { (src, out) -> if (src == raw) return out }
+        return Repo.sorted(raw, Prefs.sort).also { sortCache[k] = raw to it }
+    }
+
     private fun show() {
-        val list = cats.getOrNull(selCat)?.let { itemsFor(it) } ?: emptyList()
+        val list = cats.getOrNull(selCat)?.let { sortedFor(it) } ?: emptyList()
         gridAd.items = list
         grid.scrollToPosition(0)
         empty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE

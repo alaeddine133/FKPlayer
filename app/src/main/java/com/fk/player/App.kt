@@ -114,7 +114,7 @@ object Prefs {
     var reconnect: Boolean get() = sp.getBoolean("reco", true); set(v) = putB("reco", v)
     var autoNext: Boolean get() = sp.getBoolean("next", true); set(v) = putB("next", v)
     var frFirst: Boolean get() = sp.getBoolean("frfirst", true); set(v) = putB("frfirst", v)
-    var byDate: Boolean get() = sp.getBoolean("bydate", true); set(v) = putB("bydate", v)
+    var sort: Int get() = sp.getInt("sort", Repo.SORT_RECENT); set(v) = putI("sort", v)
 
     // Dernière chaîne regardée
     var lastLiveId: String get() = str("lastId"); set(v) = putS("lastId", v)

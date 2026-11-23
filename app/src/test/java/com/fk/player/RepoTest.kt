@@ -43,5 +43,14 @@ class RepoTest {
         assertEquals(a.l[0].id, b.l.first { it.name == "TF1 HD" }.id)
     }
 
+    @Test fun tri() {
+        fun f(n: String, added: Long, r: String?) = Item(Type.MOVIE, n, n, null, "c", rating = r, added = added)
+        val l = listOf(f("zorro", 2, "6,5"), f("Été", 3, null), f("avatar", 1, "8"))
+        assertEquals(listOf("Été", "zorro", "avatar"), Repo.sorted(l, Repo.SORT_RECENT).map { it.name })
+        assertEquals(listOf("avatar", "Été", "zorro"), Repo.sorted(l, Repo.SORT_AZ).map { it.name })
+        assertEquals(listOf("zorro", "Été", "avatar"), Repo.sorted(l, Repo.SORT_ZA).map { it.name })
+        assertEquals(listOf("avatar", "zorro", "Été"), Repo.sorted(l, Repo.SORT_RATING).map { it.name })
+    }
+
     @Test(expected = java.io.IOException::class) fun pasUneM3u() { Repo.m3u(sequenceOf("<html>erreur</html>")) }
 }

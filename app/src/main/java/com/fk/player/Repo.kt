@@ -177,9 +177,9 @@ object Repo {
 
     /** Remplace toutes les listes d'un coup et prépare les index. */
     private fun publish(lc: List<Category>, vc: List<Category>, sc: List<Category>, l: List<Item>, v0: List<Item>, s0: List<Item>) {
-        // Films et séries : les derniers ajoutés en premier (sinon ordre du serveur)
-        val v = if (Prefs.byDate) v0.sortedByDescending { it.added } else v0
-        val s = if (Prefs.byDate) s0.sortedByDescending { it.added } else s0
+        // Films et séries : les derniers ajoutés en premier (le bouton « Trier » change l'affichage)
+        val v = v0.sortedByDescending { it.added }
+        val s = s0.sortedByDescending { it.added }
         // Les éléments dont la catégorie n'est pas déclarée vont tous dans « Autres »
         fun group(items: List<Item>, cats: List<Category>): Map<String, List<Item>> {
             val ids = cats.mapTo(HashSet()) { it.id }
@@ -475,7 +475,17 @@ object Repo {
 
     /* ---------- Recherche ---------- */
 
-    fun norm(s: String): String = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+    const val SORT_RECENT = 0; const val SORT_AZ = 1; const val SORT_ZA = 2; const val SORT_RATING = 3
+    val sortNames = arrayOf("Ajoutés récemment", "De A à Z", "De Z à A", "Les mieux notés")
+
+    /** Ordre d'affichage choisi avec le bouton « Trier » (sans accents ni majuscules pour l'alphabet). */
+    fun sorted(list: List<Item>, how: Int): List<Item> = when (how) {
+        SORT_AZ, SORT_ZA -> list.map { norm(it.name) to it }.sortedBy { it.first }.map { it.second }.let { if (how == SORT_ZA) it.reversed() else it }
+        SORT_RATING -> list.sortedByDescending { it.rating?.replace(',', '.')?.toDoubleOrNull() ?: -1.0 }
+        else -> list.sortedByDescending { it.added }
+    }
+
+    fun norm(s: String): String =Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 
     fun search(q: String, types: Set<Int>, limit: Int = 300): List<Item> {
         val k = norm(q.trim()); if (k.length < 2) return emptyList()

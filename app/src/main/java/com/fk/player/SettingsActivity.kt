@@ -53,9 +53,6 @@ class SettingsActivity : BaseActivity() {
             Row("Catégories françaises en premier", "Appliqué à la prochaine actualisation", { if (Prefs.frFirst) "Oui" else "Non" }) {
                 Prefs.frFirst = !Prefs.frFirst
             },
-            Row("Ordre des films et séries", "Appliqué à la prochaine actualisation", { if (Prefs.byDate) "Derniers ajoutés en premier" else "Ordre du serveur" }) {
-                Prefs.byDate = !Prefs.byDate
-            },
             Row("Mise à jour de l'appli", "FK PLAYER vérifie aussi tout seul à chaque démarrage", { "Rechercher" }) { Updater.check(this, manual = true) },
             Row("Actualiser les listes", "Recharge chaînes, films et séries depuis le serveur", { "Actualiser" }) { reload() },
             Row("Changer de compte", "Se déconnecter et saisir un autre abonnement", { "Déconnexion" }) { logout() }

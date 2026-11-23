@@ -1,6 +1,6 @@
 {
-  "code": 9,
-  "name": "1.8",
+  "code": 10,
+  "name": "1.9",
   "url": "https://github.com/alaeddine133/FKPlayer/raw/main/FKPlayer.apk",
-  "notes": "Boutons plus lisibles : le bouton sélectionné s'affiche en clair dans les fenêtres (reprendre, mise à jour) et sur les fiches."
+  "notes": "Nouveau bouton « Trier » dans Films, Séries et Ma liste : ajoutés récemment, de A à Z, de Z à A ou les mieux notés."
 }
