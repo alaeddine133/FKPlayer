@@ -42,19 +42,25 @@ object Repo {
     var expDate: Long? = null
     var maxConnections: String? = null
 
-    var liveCats: List<Category> = emptyList(); private set
-    var vodCats: List<Category> = emptyList(); private set
-    var serCats: List<Category> = emptyList(); private set
-    var live: List<Item> = emptyList(); private set
-    var vod: List<Item> = emptyList(); private set
-    var series: List<Item> = emptyList(); private set
+    /** Toutes les listes + index ensemble : une mise à jour en arrière-plan les remplace d'un seul coup. */
+    private class Data(
+        val liveCats: List<Category> = emptyList(), val vodCats: List<Category> = emptyList(), val serCats: List<Category> = emptyList(),
+        val live: List<Item> = emptyList(), val vod: List<Item> = emptyList(), val series: List<Item> = emptyList(),
+        val liveByCat: Map<String, List<Item>> = emptyMap(), val vodByCat: Map<String, List<Item>> = emptyMap(),
+        val serByCat: Map<String, List<Item>> = emptyMap(),
+        val searchIndex: List<Pair<String, Item>> = emptyList(), val byKeyIndex: Map<String, Item> = emptyMap()
+    )
+    @Volatile private var data = Data()
 
-    // Index préparés une seule fois (catégories + recherche)
-    var liveByCat: Map<String, List<Item>> = emptyMap(); private set
-    var vodByCat: Map<String, List<Item>> = emptyMap(); private set
-    var serByCat: Map<String, List<Item>> = emptyMap(); private set
-    private var searchIndex: List<Pair<String, Item>> = emptyList()
-    private var byKeyIndex: Map<String, Item> = emptyMap()
+    val liveCats get() = data.liveCats
+    val vodCats get() = data.vodCats
+    val serCats get() = data.serCats
+    val live get() = data.live
+    val vod get() = data.vod
+    val series get() = data.series
+    val liveByCat get() = data.liveByCat
+    val vodByCat get() = data.vodByCat
+    val serByCat get() = data.serByCat
 
     private val epgCache = HashMap<String, Pair<Long, List<Epg>>>()
 
@@ -260,10 +266,7 @@ object Repo {
         // On garde les catégories qui contiennent au moins un élément
         fun withOthers(c: List<Category>, m: Map<String, List<Item>>) =
             sortCats(c.filter { m.containsKey(it.id) }) + (if (m.containsKey(OTHERS)) listOf(Category(OTHERS, "Autres")) else emptyList())
-        liveCats = withOthers(lc, lbc); vodCats = withOthers(vc, vbc); serCats = withOthers(sc, sbc)
-        live = l; vod = v; series = s
-        liveByCat = lbc; vodByCat = vbc; serByCat = sbc
-        searchIndex = idx; byKeyIndex = keys
+        data = Data(withOthers(lc, lbc), withOthers(vc, vbc), withOthers(sc, sbc), l, v, s, lbc, vbc, sbc, idx, keys)
     }
 
     private const val OTHERS = "__autres"
@@ -646,7 +649,7 @@ object Repo {
     fun search(q: String, types: Set<Int>, limit: Int = 300): List<Item> {
         val k = norm(q.trim()); if (k.length < 2) return emptyList()
         val out = ArrayList<Item>()
-        for ((n, it) in searchIndex) {
+        for ((n, it) in data.searchIndex) {
             val t = if (it.type == Type.EPISODE) Type.SERIES else it.type
             if (t in types && n.contains(k)) { out += it; if (out.size >= limit) break }
         }
@@ -654,5 +657,5 @@ object Repo {
         return out.sortedBy { if (norm(it.name).startsWith(k)) 0 else 1 }
     }
 
-    fun byKey(key: String): Item? = byKeyIndex[key]
+    fun byKey(key: String): Item? = data.byKeyIndex[key]
 }

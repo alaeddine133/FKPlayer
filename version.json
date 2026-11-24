@@ -1,6 +1,6 @@
 {
-  "code": 15,
-  "name": "2.4",
+  "code": 16,
+  "name": "2.5",
   "url": "https://github.com/alaeddine133/FKPlayer/raw/main/FKPlayer.apk",
-  "notes": "Nouveau thème Motion 3D : carrousels et listes en relief. À choisir dans Paramètres → Thème."
+  "notes": "Page de connexion par QR code : mot de passe caché, avec une case pour l'afficher. Listes mises à jour en arrière-plan sans catégorie vide."
 }

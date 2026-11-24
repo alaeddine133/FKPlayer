@@ -103,6 +103,7 @@ input[type=text],input[type=url],input[type=password]{width:100%;padding:14px;ma
 input:focus{outline:2px solid var(--c);border-color:transparent}
 button{width:100%;margin-top:12px;padding:15px;border:0;border-radius:26px;font-weight:800;font-size:16px;color:#fff;background:linear-gradient(90deg,var(--v),var(--c))}
 .ok{color:var(--c);font-size:18px;font-weight:700}#m3u{display:none}
+.show{display:flex;align-items:center;gap:8px;margin:4px 2px;color:var(--m);font-size:14px}.show input{width:18px;height:18px;accent-color:var(--c)}
 </style></head><body><div class="w"><div class="logo"><i>FK</i>FK PLAYER</div><h1>$title</h1>$content</div></body></html>"""
 
     companion object {
@@ -112,7 +113,8 @@ button{width:100%;margin-top:12px;padding:15px;border:0;border-radius:26px;font-
 <label><input type="radio" name="mode" value="m3u" onchange="sw()"><span>Lien M3U</span></label></div>
 <div id="x"><input type="url" name="server" placeholder="Serveur (http://exemple.com:8080)" inputmode="url" autocapitalize="off">
 <input type="text" name="user" placeholder="Nom d'utilisateur" autocapitalize="off" autocorrect="off">
-<input type="text" name="pass" placeholder="Mot de passe" autocapitalize="off" autocorrect="off"></div>
+<input type="password" id="pw" name="pass" placeholder="Mot de passe" autocapitalize="off" autocorrect="off">
+<label class="show"><input type="checkbox" onchange="document.getElementById('pw').type=this.checked?'text':'password'"> Afficher le mot de passe</label></div>
 <div id="m3u"><input type="url" name="m3u" placeholder="Lien M3U (http://…)" inputmode="url" autocapitalize="off"></div>
 <button type="submit">Envoyer à la TV</button></form>
 <script>function sw(){var m=document.querySelector('input[name=mode]:checked').value;document.getElementById('x').style.display=m=='m3u'?'none':'block';document.getElementById('m3u').style.display=m=='m3u'?'block':'none'}</script>"""

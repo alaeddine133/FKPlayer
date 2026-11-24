@@ -11,8 +11,8 @@ android {
         applicationId = "com.fk.player"
         minSdk = 21
         targetSdk = 34
-        versionCode = 15
-        versionName = "2.4"
+        versionCode = 16
+        versionName = "2.5"
     }
 
     buildTypes {
@@ -21,7 +21,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Même clé que la version 1.0 (sauvegardée dans le coffre) : les mises à jour s'installent par-dessus
+            // Même clé que la version 1.0 (~/.android/debug.keystore, copie privée dans le coffre : FK PLAYER/cle, jamais sur GitHub) : les mises à jour s'installent par-dessus
             signingConfig = signingConfigs.getByName("debug")
         }
     }
