@@ -64,9 +64,74 @@ object Repo {
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     fun base() = Prefs.server.trim().trimEnd('/')
-    private fun api(action: String?, extra: String = "") =
-        "${base()}/player_api.php?username=${enc(Prefs.user)}&password=${enc(Prefs.pass)}" +
+    private fun apiAt(b: String, action: String?, extra: String = "") =
+        "$b/player_api.php?username=${enc(Prefs.user)}&password=${enc(Prefs.pass)}" +
             (if (action != null) "&action=$action" else "") + extra
+    private fun api(action: String?, extra: String = "") = apiAt(base(), action, extra)
+
+    /* ---------- Changement d'adresse chez le fournisseur ---------- */
+
+    /** « http://hote:port » d'un lien complet (ou d'une adresse sans http), sinon null. */
+    fun origin(link: String): String? = try {
+        val t = link.trim()
+        val u = java.net.URI(if ("://" in t) t else "http://$t")
+        if (u.host.isNullOrBlank()) null else "${u.scheme}://${u.host}" + (if (u.port > 0) ":${u.port}" else "")
+    } catch (e: Exception) { null }
+
+    /** Adresse annoncée par le serveur dans « server_info », ou null. */
+    fun announced(proto: String, host: String, port: String, httpsPort: String): String? {
+        if (host.isBlank()) return null
+        val https = proto.equals("https", true)
+        val p = (if (https) httpsPort else port).trim()
+        return origin((if (https) "https://" else "http://") + host.trim() + (if (p.isNotEmpty() && p != "0") ":$p" else ""))
+    }
+
+    /** Adresses à essayer dans l'ordre, sans doublon : actuelle, annoncée par le serveur, secours. */
+    fun candidates(current: String, announced: String, backups: String): List<String> =
+        (listOf(current, announced) + backups.split('\n', ' ', ',', ';'))
+            .mapNotNull { if (it.isBlank()) null else origin(it) }.distinct()
+
+    /**
+     * Connexion au compte. Si l'adresse ne répond plus : renvoi définitif suivi, puis adresse annoncée
+     * par le serveur, puis adresses de secours. La première qui répond devient l'adresse du compte.
+     */
+    private suspend fun authOnline(): String = withContext(Dispatchers.IO) {
+        var last: Exception = IOException("serveur injoignable")
+        for (s in candidates(Prefs.server, Prefs.announced, Prefs.backups)) {
+            try {
+                val req = Request.Builder().url(apiAt(s, null)).header("User-Agent", FkPlayer.userAgent()).build()
+                val (body, moved) = http.newCall(req).execute().use { r ->
+                    if (!r.isSuccessful) throw IOException("le serveur répond ${r.code}")
+                    var p = r.priorResponse; var permanent = false
+                    while (p != null) { if (p.code == 301 || p.code == 308) permanent = true; p = p.priorResponse }
+                    (r.body?.string() ?: "") to (if (permanent) origin(r.request.url.toString()) else null)
+                }
+                val o = JSONObject(body)  // page d'erreur ou domaine abandonné : pas du JSON → adresse suivante
+                if (!o.has("user_info")) throw IOException("réponse invalide du serveur")
+                switchTo(moved ?: s)
+                o.optJSONObject("server_info")?.let { si ->
+                    announced(si.optString("server_protocol"), si.optString("url"), si.optString("port"), si.optString("https_port"))
+                        ?.let { if (it != Prefs.server) Prefs.announced = it }
+                }
+                return@withContext body
+            } catch (e: Exception) { last = e }
+        }
+        throw last
+    }
+
+    private fun switchTo(s: String) {
+        if (s == Prefs.server) return
+        if (Prefs.origin.isBlank()) Prefs.origin = Prefs.server  // les listes gardées restent dans le même dossier
+        Prefs.server = s
+    }
+
+    /** Vérification rapide au démarrage : true si l'appli a basculé sur une autre adresse. */
+    suspend fun serverMoved(): Boolean {
+        if (!isXtream) return false
+        val before = Prefs.server
+        authOnline()
+        return Prefs.server != before
+    }
 
     suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url).header("User-Agent", FkPlayer.userAgent()).build()
@@ -79,7 +144,7 @@ object Repo {
     /* ---------- Cache disque ---------- */
 
     private fun cacheDir(): File {
-        val id = (Prefs.mode + Prefs.server + Prefs.user + Prefs.m3u).hashCode().toString(16)
+        val id = (Prefs.mode + Prefs.origin.ifBlank { Prefs.server } + Prefs.user + Prefs.m3u).hashCode().toString(16)
         return File(filesDir, "cache/$id").apply { mkdirs() }
     }
 
@@ -87,7 +152,7 @@ object Repo {
      * Lit depuis le cache si demandé (et assez récent), sinon télécharge directement dans le fichier
      * (jamais tout le catalogue en mémoire), écrit en .tmp puis renommé : une coupure ne l'abîme pas.
      */
-    private suspend fun fetch(key: String, url: String, preferCache: Boolean): File = withContext(Dispatchers.IO) {
+    private suspend fun fetch(key: String, url: String, preferCache: Boolean, online: (suspend () -> String)? = null): File = withContext(Dispatchers.IO) {
         val f = File(cacheDir(), "$key.json")
         if (preferCache && f.exists() && System.currentTimeMillis() - f.lastModified() < 24 * 3600_000L) {
             fromCache = true
@@ -95,10 +160,12 @@ object Repo {
         }
         try {
             val tmp = File(f.path + ".tmp")
+            if (online != null) tmp.writeText(online()) else {
             val req = Request.Builder().url(url).header("User-Agent", FkPlayer.userAgent()).build()
             http.newCall(req).execute().use { r ->
                 if (!r.isSuccessful) throw IOException("le serveur répond ${r.code}")
                 r.body!!.byteStream().use { i -> tmp.outputStream().use { i.copyTo(it) } }
+            }
             }
             if (tmp.length() > 2 || !f.exists()) { if (!tmp.renameTo(f)) throw IOException("stockage plein") } else tmp.delete()
             f
@@ -145,7 +212,7 @@ object Repo {
     suspend fun load(preferCache: Boolean, progress: (String) -> Unit) = withContext(Dispatchers.Default) {
         fromCache = false
         if (isXtream) {
-            val auth = fetch("auth", api(null), preferCache)
+            val auth = fetch("auth", "", preferCache) { authOnline() }
             val o = try { JSONObject(auth.readText()) } catch (e: Exception) { throw IOException("réponse invalide du serveur") }
             val ui = o.optJSONObject("user_info") ?: throw IOException("identifiants refusés")
             if (ui.optInt("auth", 0) != 1) throw IOException("identifiants incorrects")

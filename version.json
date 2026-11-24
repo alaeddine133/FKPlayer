@@ -1,6 +1,6 @@
 {
-  "code": 11,
-  "name": "2.0",
+  "code": 12,
+  "name": "2.1",
   "url": "https://github.com/alaeddine133/FKPlayer/raw/main/FKPlayer.apk",
-  "notes": "Les fenêtres s'ouvrent avec un bouton déjà surligné : plus besoin d'appuyer sur une flèche avant OK."
+  "notes": "Si ton fournisseur change l'adresse du serveur, FK PLAYER bascule tout seul sur la nouvelle. Nouveau : « Adresses de secours » dans Paramètres."
 }

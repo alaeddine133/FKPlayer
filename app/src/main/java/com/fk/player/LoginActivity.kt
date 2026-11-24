@@ -115,7 +115,7 @@ class LoginActivity : BaseActivity() {
             val x = Repo.xtreamFromM3u(linkTxt)
             if (x != null) {
                 // Lien get.php = compte Xtream : plus rapide, avec guide TV et séries complètes
-                Prefs.mode = "xtream"; Prefs.server = x.first; Prefs.user = x.second; Prefs.pass = x.third
+                Prefs.mode = "xtream"; Prefs.newServer(x.first); Prefs.user = x.second; Prefs.pass = x.third
             } else {
                 Prefs.mode = "m3u"
             }
@@ -123,7 +123,7 @@ class LoginActivity : BaseActivity() {
         } else {
             val s = server.text.toString(); val u = user.text.toString().trim(); val p = pass.text.toString().trim()
             if (s.isBlank() || u.isBlank() || p.isBlank()) { status.text = "Remplis le serveur, l'utilisateur et le mot de passe"; return }
-            Prefs.server = Repo.cleanServer(s); Prefs.user = u; Prefs.pass = p; Prefs.mode = "xtream"
+            Prefs.newServer(Repo.cleanServer(s)); Prefs.user = u; Prefs.pass = p; Prefs.mode = "xtream"
         }
         connect(preferCache = false)
     }

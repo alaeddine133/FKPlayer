@@ -52,5 +52,19 @@ class RepoTest {
         assertEquals(listOf("avatar", "zorro", "Été"), Repo.sorted(l, Repo.SORT_RATING).map { it.name })
     }
 
+    @Test fun adresses() {
+        assertEquals("http://a.com:8080", Repo.origin("a.com:8080/player_api.php?x=1"))
+        assertEquals("https://b.tv", Repo.origin("https://b.tv/"))
+        assertNull(Repo.origin("  "))
+        // Adresse annoncée : port selon le protocole, « 0 » = pas de port
+        assertEquals("http://new.tv:80", Repo.announced("http", "new.tv", "80", "443"))
+        assertEquals("https://new.tv:443", Repo.announced("https", "new.tv", "80", "443"))
+        assertEquals("http://new.tv", Repo.announced("", "new.tv", "0", ""))
+        assertNull(Repo.announced("http", "", "80", ""))
+        // Ordre : actuelle, annoncée, secours ; sans doublon ni ligne vide
+        assertEquals(listOf("http://old.tv:80", "http://new.tv:80", "http://s1.tv:8080", "https://s2.tv"),
+            Repo.candidates("http://old.tv:80", "http://new.tv:80", "s1.tv:8080\n\nhttp://old.tv:80, https://s2.tv"))
+    }
+
     @Test(expected = java.io.IOException::class) fun pasUneM3u() { Repo.m3u(sequenceOf("<html>erreur</html>")) }
 }

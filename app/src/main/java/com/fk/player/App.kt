@@ -103,6 +103,12 @@ object Prefs {
     var user: String get() = str("user"); set(v) = putS("user", v)
     var pass: String get() = str("pass"); set(v) = putS("pass", v)
     var m3u: String get() = str("m3u"); set(v) = putS("m3u", v)
+    // Changement d'adresse : adresse de la connexion d'origine, adresse annoncée par le serveur, adresses de secours
+    var origin: String get() = str("origin"); set(v) = putS("origin", v)
+    var announced: String get() = str("announced"); set(v) = putS("announced", v)
+    var backups: String get() = str("backups"); set(v) = putS("backups", v)
+    /** Nouveau compte saisi : on oublie l'historique d'adresses de l'ancien. */
+    fun newServer(s: String) { server = s; origin = ""; announced = "" }
 
     // Lecteur
     var liveFormat: String get() = str("fmt", "ts"); set(v) = putS("fmt", v)

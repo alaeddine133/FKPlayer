@@ -51,9 +51,14 @@ class HomeActivity : BaseActivity() {
         }
 
         // Ouvert depuis les listes gardées sur la box : mise à jour discrète en arrière-plan
-        if (intent.getBooleanExtra("refresh", false) && Repo.cacheAge() > 6 * 3600_000L) {
+        // + vérification que le serveur répond toujours : nouvelle adresse du fournisseur → bascule toute seule
+        if (intent.getBooleanExtra("refresh", false)) {
             lifecycleScope.launch {
-                try { Repo.load(preferCache = false) { }; refreshTexts() } catch (_: Exception) { }
+                val before = Prefs.server
+                try {
+                    if (Repo.cacheAge() > 6 * 3600_000L || Repo.serverMoved()) { Repo.load(preferCache = false) { }; refreshTexts() }
+                } catch (_: Exception) { }
+                if (Prefs.server != before) toast("Nouvelle adresse du serveur : ${Prefs.server}")
             }
         }
     }

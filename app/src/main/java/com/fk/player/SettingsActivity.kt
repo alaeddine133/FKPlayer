@@ -24,7 +24,7 @@ class SettingsActivity : BaseActivity() {
         setContentView(R.layout.activity_settings)
         setTop("Paramètres")
 
-        val rows = listOf(
+        val rows = listOfNotNull(
             Row("Format du direct", "TS est le plus stable sur la plupart des serveurs", { if (Prefs.liveFormat == "ts") "TS · recommandé" else "HLS (m3u8)" }) {
                 Prefs.liveFormat = if (Prefs.liveFormat == "ts") "m3u8" else "ts"
             },
@@ -53,6 +53,8 @@ class SettingsActivity : BaseActivity() {
             Row("Catégories françaises en premier", "Appliqué à la prochaine actualisation", { if (Prefs.frFirst) "Oui" else "Non" }) {
                 Prefs.frFirst = !Prefs.frFirst
             },
+            if (!Repo.isXtream) null else Row("Adresses de secours du serveur", "Si le serveur ne répond plus, FK PLAYER essaie ces adresses toute seule",
+                { Repo.candidates("", "", Prefs.backups).size.let { if (it == 0) "Aucune" else "$it adresse" + (if (it > 1) "s" else "") } }) { editBackups() },
             Row("Mise à jour de l'appli", "FK PLAYER vérifie aussi tout seul à chaque démarrage", { "Rechercher" }) { Updater.check(this, manual = true) },
             Row("Actualiser les listes", "Recharge chaînes, films et séries depuis le serveur", { "Actualiser" }) { reload() },
             Row("Changer de compte", "Se déconnecter et saisir un autre abonnement", { "Déconnexion" }) { logout() }
@@ -91,6 +93,25 @@ class SettingsActivity : BaseActivity() {
                 toast("Échec : ${e.message}")
             }
         }
+    }
+
+    private fun editBackups() {
+        val box = android.widget.EditText(this).apply {
+            setText(Prefs.backups); hint = "http://adresse2.com:8080 (une par ligne)"
+            minLines = 3; setSingleLine(false)
+        }
+        val pad = (24 * resources.displayMetrics.density).toInt()
+        val wrap = android.widget.FrameLayout(this).apply { setPadding(pad, 0, pad, 0); addView(box) }
+        AlertDialog.Builder(this)
+            .setTitle("Adresses de secours")
+            .setMessage("Celles que ton fournisseur t'a données. Mêmes identifiants, autre adresse.")
+            .setView(wrap)
+            .setPositiveButton("Enregistrer") { _, _ ->
+                Prefs.backups = Repo.candidates("", "", box.text.toString()).joinToString("\n")
+                ad.notifyDataSetChanged()
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
     }
 
     private fun logout() {
