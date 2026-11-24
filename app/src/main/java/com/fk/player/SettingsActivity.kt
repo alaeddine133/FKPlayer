@@ -103,6 +103,6 @@ class SettingsActivity : BaseActivity() {
                 finish()
             }
             .setNegativeButton("Annuler", null)
-            .show()
+            .showTv(android.content.DialogInterface.BUTTON_NEGATIVE)  // « Annuler » d'abord : pas de déconnexion par erreur
     }
 }

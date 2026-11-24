@@ -47,7 +47,7 @@ class HomeActivity : BaseActivity() {
         if (crash.exists()) {
             val txt = crash.readText().lines().take(14).joinToString("\n"); crash.delete()
             androidx.appcompat.app.AlertDialog.Builder(this).setTitle("FK PLAYER s'est fermé la dernière fois")
-                .setMessage("Prends une photo de ce message pour la correction :\n\n$txt").setPositiveButton("OK", null).show()
+                .setMessage("Prends une photo de ce message pour la correction :\n\n$txt").setPositiveButton("OK", null).showTv()
         }
 
         // Ouvert depuis les listes gardées sur la box : mise à jour discrète en arrière-plan

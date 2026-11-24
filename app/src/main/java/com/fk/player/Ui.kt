@@ -27,6 +27,10 @@ import java.util.Locale
 fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 fun Context.toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
+/** Fenêtre à boutons : sur TV, rien n'est surligné à l'ouverture si on ne place pas le focus soi-même. */
+fun androidx.appcompat.app.AlertDialog.Builder.showTv(button: Int = android.content.DialogInterface.BUTTON_POSITIVE) =
+    show().also { it.getButton(button)?.requestFocus() }
+
 private val hm = SimpleDateFormat("HH:mm", Locale.FRANCE)
 fun hhmm(t: Long): String = hm.format(Date(t))
 

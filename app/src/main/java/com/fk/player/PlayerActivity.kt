@@ -726,6 +726,6 @@ class PlayerActivity : BaseActivity() {
             append("Tampon : ${FkPlayer.bufferNames[Prefs.buffer]}\n")
             append("Format direct : ${Prefs.liveFormat.uppercase()}  ·  User-Agent : ${FkPlayer.uaNames[Prefs.ua]}")
         }
-        AlertDialog.Builder(this).setTitle("Infos du flux").setMessage(txt).setPositiveButton("OK", null).show()
+        AlertDialog.Builder(this).setTitle("Infos du flux").setMessage(txt).setPositiveButton("OK", null).showTv()
     }
 }

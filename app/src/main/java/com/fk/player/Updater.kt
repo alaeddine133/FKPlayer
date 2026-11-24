@@ -39,7 +39,7 @@ object Updater {
                 .setMessage(o.optString("notes").ifBlank { "Améliorations et corrections." })
                 .setPositiveButton("Mettre à jour") { _, _ -> install(a, o.optString("url")) }
                 .setNegativeButton("Plus tard", null)
-                .show()
+                .showTv()
         }
     }
 
@@ -53,7 +53,7 @@ object Updater {
                 .setPositiveButton("Ouvrir les réglages") { _, _ ->
                     try { a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${a.packageName}"))) }
                     catch (_: Exception) { a.toast("Ouvre les réglages de la box à la main") }
-                }.setNegativeButton("Plus tard", null).show()
+                }.setNegativeButton("Plus tard", null).showTv()
             return
         }
         busy = true
