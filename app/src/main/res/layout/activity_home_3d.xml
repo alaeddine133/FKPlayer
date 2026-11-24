@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accueil « Motion 3D » : les rubriques en carrousel, Direct au centre. Mêmes identifiants que l'accueil Mosaïque. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:clipChildren="false">
+
+    <include layout="@layout/aurora" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:orientation="vertical"
+        android:paddingTop="22dp"
+        android:paddingBottom="22dp">
+
+        <include
+            layout="@layout/top_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="44dp"
+            android:layout_marginRight="44dp" />
+
+        <HorizontalScrollView
+            android:id="@+id/homeScroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:clipChildren="false"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingLeft="380dp"
+                android:paddingRight="380dp">
+
+                <!-- RECHERCHE -->
+                <FrameLayout
+                    android:id="@+id/tileSearch"
+                    android:layout_width="200dp"
+                    android:layout_height="280dp"
+                    android:layout_marginLeft="14dp"
+                    android:layout_marginRight="14dp"
+                    android:background="@drawable/tile_card"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="@drawable/focus_ring">
+
+                    <ImageView
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_margin="20dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_search" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:layout_margin="18dp"
+                        android:orientation="vertical">
+
+                        <TextView style="@style/H1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Recherche" android:textSize="22sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Film, série ou chaîne" android:textColor="#B4B0C8" android:textSize="11sp" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <!-- FILMS -->
+                <FrameLayout
+                    android:id="@+id/tileFilms"
+                    android:layout_width="200dp"
+                    android:layout_height="280dp"
+                    android:layout_marginLeft="14dp"
+                    android:layout_marginRight="14dp"
+                    android:background="@drawable/tile_films"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="@drawable/focus_ring">
+
+                    <FrameLayout
+                        android:layout_width="130dp"
+                        android:layout_height="120dp"
+                        android:layout_gravity="center_horizontal|top"
+                        android:layout_marginTop="22dp"
+                        android:importantForAccessibility="noHideDescendants">
+
+                        <View android:id="@+id/fanA" android:layout_width="56dp" android:layout_height="84dp" android:layout_gravity="right" android:layout_marginTop="10dp" android:layout_marginRight="44dp" android:background="@drawable/poster_a" android:rotation="-9" />
+                        <View android:id="@+id/fanB" android:layout_width="56dp" android:layout_height="84dp" android:layout_gravity="right" android:layout_marginTop="10dp" android:layout_marginRight="6dp" android:background="@drawable/poster_b" android:rotation="7" />
+                        <View android:layout_width="62dp" android:layout_height="92dp" android:layout_gravity="right" android:layout_marginRight="24dp" android:background="@drawable/poster_c" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:layout_margin="18dp"
+                        android:orientation="vertical">
+
+                        <TextView style="@style/H1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Films" android:textSize="24sp" />
+                        <TextView android:id="@+id/filmsSub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:maxLines="2" android:textColor="#C9C2E8" android:textSize="11sp" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <!-- DIRECT (au centre au démarrage) -->
+                <FrameLayout
+                    android:id="@+id/tileLive"
+                    android:layout_width="300dp"
+                    android:layout_height="320dp"
+                    android:layout_marginLeft="14dp"
+                    android:layout_marginRight="14dp"
+                    android:background="@drawable/tile_live"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="@drawable/focus_ring_big">
+
+                    <ImageView android:layout_width="match_parent" android:layout_height="140dp" android:layout_gravity="bottom" android:importantForAccessibility="no" android:scaleType="fitXY" android:src="@drawable/skyline" />
+                    <View android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/tile_shade" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_margin="16dp"
+                        android:background="@drawable/live_chip"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingLeft="10dp"
+                        android:paddingTop="5dp"
+                        android:paddingRight="10dp"
+                        android:paddingBottom="5dp">
+
+                        <View android:id="@+id/liveDot" android:layout_width="7dp" android:layout_height="7dp" android:background="@drawable/dot_live" />
+                        <TextView android:id="@+id/liveCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="7dp" android:fontFamily="sans-serif-medium" android:text="DIRECT" android:textColor="@color/text" android:textSize="11sp" android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="18dp"
+                        android:layout_gravity="right|top"
+                        android:layout_margin="18dp"
+                        android:gravity="bottom"
+                        android:orientation="horizontal">
+
+                        <View android:id="@+id/eq1" android:layout_width="3dp" android:layout_height="18dp" android:background="@drawable/eq_bar" />
+                        <View android:id="@+id/eq2" android:layout_width="3dp" android:layout_height="18dp" android:layout_marginLeft="3dp" android:background="@drawable/eq_bar" />
+                        <View android:id="@+id/eq3" android:layout_width="3dp" android:layout_height="18dp" android:layout_marginLeft="3dp" android:background="@drawable/eq_bar" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:layout_margin="18dp"
+                        android:orientation="vertical">
+
+                        <TextView android:id="@+id/liveLast" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-medium" android:text="Toutes tes chaînes" android:textColor="@color/cyan_light" android:textSize="12sp" />
+                        <TextView style="@style/H1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="TV en direct" android:textSize="28sp" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:layout_marginTop="12dp"
+                            android:background="@drawable/pill_white"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingLeft="16dp"
+                            android:paddingRight="18dp">
+
+                            <ImageView android:layout_width="11dp" android:layout_height="12dp" android:importantForAccessibility="no" android:src="@drawable/ic_play" />
+                            <TextView android:id="@+id/liveBtn" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="8dp" android:fontFamily="sans-serif-black" android:text="Regarder le direct" android:textColor="#0B0918" android:textSize="13sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </FrameLayout>
+
+                <!-- SERIES -->
+                <FrameLayout
+                    android:id="@+id/tileSeries"
+                    android:layout_width="200dp"
+                    android:layout_height="280dp"
+                    android:layout_marginLeft="14dp"
+                    android:layout_marginRight="14dp"
+                    android:background="@drawable/tile_series"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="@drawable/focus_ring">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_horizontal|top"
+                        android:layout_marginTop="26dp"
+                        android:importantForAccessibility="noHideDescendants"
+                        android:orientation="vertical">
+
+                        <View android:layout_width="130dp" android:layout_height="28dp" android:background="@drawable/bar_a" />
+                        <View android:layout_width="130dp" android:layout_height="28dp" android:layout_marginTop="6dp" android:background="@drawable/bar_b" />
+                        <View android:layout_width="130dp" android:layout_height="28dp" android:layout_marginTop="6dp" android:background="@drawable/bar_c" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:layout_margin="18dp"
+                        android:orientation="vertical">
+
+                        <TextView style="@style/H1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Séries" android:textSize="24sp" />
+                        <TextView android:id="@+id/seriesSub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#BFE8F2" android:textSize="11sp" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <!-- MA LISTE -->
+                <FrameLayout
+                    android:id="@+id/tileFav"
+                    android:layout_width="200dp"
+                    android:layout_height="280dp"
+                    android:layout_marginLeft="14dp"
+                    android:layout_marginRight="14dp"
+                    android:background="@drawable/tile_fav"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="@drawable/focus_ring">
+
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp" android:layout_margin="20dp" android:importantForAccessibility="no" android:src="@drawable/ic_heart" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:layout_margin="18dp"
+                        android:orientation="vertical">
+
+                        <TextView style="@style/H1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ma liste" android:textSize="24sp" />
+                        <TextView android:id="@+id/favSub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#CFC9EA" android:textSize="11sp" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <!-- PARAMÈTRES -->
+                <FrameLayout
+                    android:id="@+id/tileSettings"
+                    android:layout_width="200dp"
+                    android:layout_height="280dp"
+                    android:layout_marginLeft="14dp"
+                    android:layout_marginRight="14dp"
+                    android:background="@drawable/tile_card"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="@drawable/focus_ring">
+
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp" android:layout_margin="20dp" android:importantForAccessibility="no" android:src="@drawable/ic_gear" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:layout_margin="18dp"
+                        android:orientation="vertical">
+
+                        <TextView style="@style/H1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Paramètres" android:textSize="22sp" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Thème, lecteur, compte" android:textColor="#B4B0C8" android:textSize="11sp" />
+                    </LinearLayout>
+                </FrameLayout>
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="◀ ▶ pour tourner · OK pour ouvrir"
+            android:textColor="#8C88A6"
+            android:textSize="11sp" />
+    </LinearLayout>
+</FrameLayout>

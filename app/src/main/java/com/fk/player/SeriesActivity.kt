@@ -65,6 +65,8 @@ class SeriesActivity : BaseActivity() {
             playChoice(list, i, serie.name)
         }
         el.adapter = epAd
+        Fx3d.list(el, horizontal = false)
+        Fx3d.cover(findViewById(R.id.cover))
         findViewById<View>(R.id.similar).visibility = View.GONE; findViewById<View>(R.id.simTitle).visibility = View.GONE
 
         lifecycleScope.launch {

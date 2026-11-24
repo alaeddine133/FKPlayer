@@ -25,6 +25,12 @@ class SettingsActivity : BaseActivity() {
         setTop("Paramètres")
 
         val rows = listOfNotNull(
+            Row("Thème", "Mosaïque : tuiles classiques · Motion 3D : carrousels en relief", { if (Prefs.theme == 1) "Motion 3D" else "Mosaïque" }) {
+                Prefs.theme = 1 - Prefs.theme
+                // Tous les écrans sont redessinés avec le nouveau thème, en repartant de l'accueil
+                startActivity(Intent(this, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                finish()
+            },
             Row("Format du direct", "TS est le plus stable sur la plupart des serveurs", { if (Prefs.liveFormat == "ts") "TS · recommandé" else "HLS (m3u8)" }) {
                 Prefs.liveFormat = if (Prefs.liveFormat == "ts") "m3u8" else "ts"
             },
@@ -70,6 +76,7 @@ class SettingsActivity : BaseActivity() {
         ad.onClick = { r, i -> r.action(); ad.notifyItemChanged(i) }
         ad.items = rows
         list.adapter = ad
+        Fx3d.list(list, horizontal = false)
         list.post { list.getChildAt(0)?.requestFocus() }
 
         findViewById<TextView>(R.id.version).text = "FK PLAYER · version ${packageManager.getPackageInfo(packageName, 0).versionName}"

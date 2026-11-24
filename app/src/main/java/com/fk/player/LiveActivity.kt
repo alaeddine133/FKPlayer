@@ -85,6 +85,8 @@ class LiveActivity : BaseActivity() {
         chAd.onClick = { c, i -> if (current?.id == c.id) fullscreen(i) else { preview(c); fullscreen(i) } }
         chAd.onLong = { c, _ -> toggleFav(c) { chAd.notifyDataSetChanged(); catAd.notifyItemChanged(0) } }
         chList.adapter = chAd
+        Fx3d.list(chList, horizontal = false)
+        Fx3d.list(catList, horizontal = false)
 
         findViewById<View>(R.id.preview).setOnClickListener { current?.let { c -> fullscreen(chans.indexOfFirst { it.id == c.id }) } }
         findViewById<View>(R.id.replayBtn).setOnClickListener { current?.let { replay(it) } }

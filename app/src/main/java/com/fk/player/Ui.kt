@@ -134,7 +134,8 @@ class Adapter<T>(
             } else false
         }
         v.setOnFocusChangeListener { view, f ->
-            if (scale != 1f) view.animate().scaleX(if (f) scale else 1f).scaleY(if (f) scale else 1f).setDuration(150).start()
+            // Motion 3D : la taille de l'élément entier est gérée par le carrousel
+            if (scale != 1f && !(Fx3d.on && view === root)) view.animate().scaleX(if (f) scale else 1f).scaleY(if (f) scale else 1f).setDuration(150).start()
             if (f) { val p = h.bindingAdapterPosition; if (p in items.indices) onFocus?.invoke(items[p], p) }
         }
     }
@@ -155,6 +156,12 @@ open class BaseActivity : AppCompatActivity() {
         super.onCreate(b)
         Prefs.init(applicationContext)
         Repo.init(applicationContext)
+    }
+
+    /** Motion 3D : fond bleu nuit en profondeur (le lecteur garde son fond noir). */
+    override fun setContentView(layoutResID: Int) {
+        super.setContentView(layoutResID)
+        if (Fx3d.on && this !is PlayerActivity) findViewById<ViewGroup>(android.R.id.content).getChildAt(0)?.setBackgroundResource(R.drawable.bg_3d)
     }
 
     /** Le lecteur et l'écran de démarrage n'affichent pas la fenêtre de mise à jour (pas d'interruption de la vidéo). */

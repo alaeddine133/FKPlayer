@@ -82,13 +82,18 @@ class VodActivity : BaseActivity() {
 
         // Colonnes adaptées à la largeur de l'écran
         val span = (resources.displayMetrics.widthPixels / resources.displayMetrics.density / 140).toInt().coerceIn(4, 8) - 1
-        grid.layoutManager = GridLayoutManager(this, span.coerceAtLeast(3))
-        gridAd = Adapter(R.layout.item_poster, 1.07f) { v, it, _ -> bindPoster(v, it) }
+        // Motion 3D : une rangée d'affiches en carrousel au lieu de la grille
+        grid.layoutManager = if (Fx3d.on) LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false) else GridLayoutManager(this, span.coerceAtLeast(3))
+        gridAd = Adapter(R.layout.item_poster, 1.07f) { v, it, _ ->
+            if (Fx3d.on) v.layoutParams = v.layoutParams.apply { width = dp(170) }
+            bindPoster(v, it)
+        }
         gridAd.focusTarget = R.id.card
         gridAd.onClick = { _, i -> open(gridAd.items, i) }
         gridAd.onLong = { it, _ -> toggleFav(it) { refresh() } }
         grid.adapter = gridAd
-
+        Fx3d.list(grid, horizontal = true)
+        Fx3d.list(catList, horizontal = false)
         // Ma liste vide → on ouvre « Tous »
         selCat = if (mode != FAV && itemsFor(cats[0]).isEmpty()) (if (mode == MOVIES && itemsFor(cats[1]).isNotEmpty()) 1 else cats.indexOfFirst { it.id == K_ALL }) else 0
         if (mode == FAV) selCat = cats.indexOfFirst { itemsFor(it).isNotEmpty() }.coerceAtLeast(0)

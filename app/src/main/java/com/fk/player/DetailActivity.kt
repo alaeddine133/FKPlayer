@@ -32,6 +32,7 @@ class DetailActivity : BaseActivity() {
         findViewById<View>(R.id.btnStart).setOnClickListener { Prefs.clearPos(movie.key); play(listOf(movie), 0) }
 
         findViewById<View>(R.id.btnResume).requestFocus()
+        Fx3d.cover(findViewById(R.id.cover))
 
         lifecycleScope.launch {
             val i = Repo.vodInfo(movie.id)

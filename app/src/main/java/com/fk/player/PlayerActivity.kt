@@ -448,6 +448,8 @@ class PlayerActivity : BaseActivity() {
         pChAd.onLong = { c, _ -> toggleFav(c) { pChAd.notifyDataSetChanged(); pCatAd.notifyItemChanged(0) } }
         pChAd.onFocus = { _, i -> pLastChan = i }
         pChans.adapter = pChAd
+        Fx3d.list(pChans, horizontal = false)
+        Fx3d.list(pCats, horizontal = false)
     }
 
     private fun showPanel(show: Boolean) {

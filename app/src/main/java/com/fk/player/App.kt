@@ -125,6 +125,8 @@ object Prefs {
     var autoNext: Boolean get() = sp.getBoolean("next", true); set(v) = putB("next", v)
     var frFirst: Boolean get() = sp.getBoolean("frfirst", true); set(v) = putB("frfirst", v)
     var sort: Int get() = sp.getInt("sort", Repo.SORT_RECENT); set(v) = putI("sort", v)
+    /** 0 = Mosaïque, 1 = Motion 3D */
+    var theme: Int get() = sp.getInt("theme", 0); set(v) = putI("theme", v)
 
     // Dernière chaîne regardée
     var lastLiveId: String get() = str("lastId"); set(v) = putS("lastId", v)

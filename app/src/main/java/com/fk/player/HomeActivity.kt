@@ -15,7 +15,7 @@ class HomeActivity : BaseActivity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         if (needData()) return
-        setContentView(R.layout.activity_home)
+        setContentView(if (Fx3d.on) R.layout.activity_home_3d else R.layout.activity_home)
 
         val live = findViewById<View>(R.id.tileLive)
         val films = findViewById<View>(R.id.tileFilms)
@@ -31,10 +31,16 @@ class HomeActivity : BaseActivity() {
         search.setOnClickListener { startActivity(Intent(this, SearchActivity::class.java)) }
         settings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
 
-        live.focusScale(1.02f)
-        listOf(films, series, fav, search, settings).forEach { it.focusScale(1.04f) }
-
-        popIn(live, films, series, fav, search, settings)
+        if (Fx3d.on) {
+            // Carrousel : Direct au centre dès l'ouverture
+            val scroll = findViewById<android.widget.HorizontalScrollView>(R.id.homeScroll)
+            Fx3d.row(scroll, listOf(search, films, live, series, fav, settings))
+            scroll.post { scroll.scrollTo((live.parent as View).left + (live.left + live.right) / 2 - scroll.width / 2, 0) }
+        } else {
+            live.focusScale(1.02f)
+            listOf(films, series, fav, search, settings).forEach { it.focusScale(1.04f) }
+            popIn(live, films, series, fav, search, settings)
+        }
         pulse(findViewById(R.id.liveDot))
         equalizer(findViewById(R.id.eq1), findViewById(R.id.eq2), findViewById(R.id.eq3))
         swing(findViewById(R.id.fanA), -9f, -13f)
