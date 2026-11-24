@@ -36,6 +36,12 @@ class LiveActivity : BaseActivity() {
     private var pendingPreview: Runnable? = null
     private var ready = false
     private var previewRetry = 0
+    private var touched = false
+
+    override fun dispatchKeyEvent(e: android.view.KeyEvent): Boolean {
+        if (e.action == android.view.KeyEvent.ACTION_DOWN) touched = true
+        return super.dispatchKeyEvent(e)
+    }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -94,6 +100,7 @@ class LiveActivity : BaseActivity() {
         if (lastIdx >= 0) (chList.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(lastIdx, 0)
         // On attend que les listes soient dessinées avant de placer le focus sur la chaîne
         ui.postDelayed({
+            if (touched) { ready = true; return@postDelayed }  // l'utilisateur bouge déjà : on ne le ramène pas en arrière
             val target = chList.findViewHolderForAdapterPosition(lastIdx.coerceAtLeast(0))?.itemView
             if (target != null) target.requestFocus() else catList.getChildAt(selCat)?.requestFocus()
             ui.postDelayed({ ready = true }, 400)

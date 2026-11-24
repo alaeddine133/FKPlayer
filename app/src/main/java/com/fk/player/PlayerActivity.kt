@@ -103,6 +103,7 @@ class PlayerActivity : BaseActivity() {
     private var pSel = 1
     private var pPending: Runnable? = null
     private val panelHide = Runnable { showPanel(false) }
+    private var pLastChan = -1
     private val panelOn get() = panel.visibility == View.VISIBLE
 
     /** Chien de garde : flux bloqué trop longtemps en chargement → on le relance. */
@@ -444,6 +445,7 @@ class PlayerActivity : BaseActivity() {
             showPanel(false); load(resume = false)
         }
         pChAd.onLong = { c, _ -> toggleFav(c) { pChAd.notifyDataSetChanged(); pCatAd.notifyItemChanged(0) } }
+        pChAd.onFocus = { _, i -> pLastChan = i }
         pChans.adapter = pChAd
     }
 
@@ -459,7 +461,7 @@ class PlayerActivity : BaseActivity() {
         // On ouvre sur le bouquet de la chaîne en cours
         pSel = pCatList.indexOfFirst { it.id == Prefs.lastLiveCat && chansOf(it).any { c -> c.id == cur.id } }.takeIf { it >= 0 } ?: 1
         pCatAd.items = pCatList
-        pChAd.items = chansOf(pCatList[pSel])
+        pChAd.items = chansOf(pCatList[pSel]); pLastChan = -1
         showOverlay(false)
         panel.visibility = View.VISIBLE; panel.alpha = 0f; panel.translationX = -dp(40).toFloat()
         panel.animate().alpha(1f).translationX(0f).setDuration(200).start()
@@ -473,6 +475,8 @@ class PlayerActivity : BaseActivity() {
 
     /** Place le focus dès que la liste est dessinée (les box lentes mettent parfois plus d'une seconde). */
     private fun focusWhenReady(rv: RecyclerView, tries: Int = 30, pick: () -> View?) {
+        // Le focus est déjà dans la liste (l'utilisateur descend) : surtout ne pas le ramener sur la chaîne en cours
+        if (rv.hasFocus()) return
         // Une liste en train de se redessiner perdrait aussitôt le focus : on attend qu'elle soit stable
         val v = if (rv.isLayoutRequested || rv.hasPendingAdapterUpdates()) null else pick()
         if (v != null && v.requestFocus()) return
@@ -497,7 +501,7 @@ class PlayerActivity : BaseActivity() {
         if (i == pSel) return
         val old = pSel; pSel = i
         pCatAd.notifyItemChanged(old); pCatAd.notifyItemChanged(i)
-        pChAd.items = chansOf(pCatList[i])
+        pChAd.items = chansOf(pCatList[i]); pLastChan = -1
         pChans.scrollToPosition(0)
     }
 
@@ -581,7 +585,11 @@ class PlayerActivity : BaseActivity() {
                 KeyEvent.KEYCODE_BACK -> { showPanel(false); return true }
                 // Le focus s'est échappé des listes : la touche le remet sur la chaîne en cours
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
-                    if (!inLists) { focusChan(pChAd.items.indexOfFirst { it.id == cur.id }.coerceAtLeast(0)); return true }
+                    if (!inLists) {
+                        // Retour sur la dernière chaîne où l'on était (pas sur celle en lecture)
+                        focusChan(if (pLastChan in pChAd.items.indices) pLastChan else pChAd.items.indexOfFirst { it.id == cur.id }.coerceAtLeast(0))
+                        return true
+                    }
                 // Retour au bouquet affiché (et non à celui qui se trouve à la même hauteur)
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (!pCats.hasFocus()) { focusCat(); return true }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (!pChans.hasFocus()) { focusFirstChan(); return true }
