@@ -57,7 +57,11 @@ data class Item(
     val epgId: String? = null,
     val sub: String? = null,
     val archive: Int = 0,  // jours de replay disponibles (chaînes)
-    val added: Long = 0    // date d'ajout sur le serveur (secondes)
+    val added: Long = 0,   // date d'ajout sur le serveur (secondes)
+    // Pour les « titres similaires » (quand le serveur les donne dans la liste)
+    val genre: String? = null,
+    val people: String? = null,  // acteurs + réalisateur
+    val year: Int = 0
 ) {
     val key: String get() = "$type:$id"
 }

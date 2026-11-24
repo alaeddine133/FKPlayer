@@ -66,5 +66,24 @@ class RepoTest {
             Repo.candidates("http://old.tv:80", "http://new.tv:80", "s1.tv:8080\n\nhttp://old.tv:80, https://s2.tv"))
     }
 
+    @Test fun similaires() {
+        // Langue, qualité, année et numéro ne comptent pas
+        assertEquals(setOf("fast", "furious"), Repo.titleWords("FR - Fast & Furious 7 (2015) 4K MULTI"))
+        assertEquals(setOf("action", "sf", "comedie"), Repo.genres("Action, Science-Fiction / Comedy"))
+
+        val idf = { w: String -> if (w == "nuit") 0.3 else 2.0 }  // « nuit » : mot courant
+        fun p(n: String, g: String = "", who: String = "", y: Int = 0) = Repo.Profile(Repo.titleWords(n), Repo.genres(g), Repo.people(who), y)
+        val me = p("Fast & Furious 7", "Action, Thriller", "Vin Diesel, Paul Walker, James Wan", 2015)
+        val saga = p("Fast & Furious 8", "", "", 2017)
+        val memeGenre = p("John Wick", "Action, Thriller", "Keanu Reeves", 2014)
+        val memeActeur = p("Riddick", "Science-Fiction", "Vin Diesel", 2013)
+        val rien = p("Le Roi Lion", "Animation, Famille", "Jon Favreau", 2019)
+        val s = listOf(saga, memeGenre, memeActeur, rien).map { Repo.closeness(me, it, idf) }
+        org.junit.Assert.assertTrue("ordre attendu : saga > même genre > même acteur : $s", s[0] > s[1] && s[1] > s[2] && s[2] > 0)
+        assertEquals(0.0, s[3], 0.0)  // aucun rapport : pas affiché
+        // Un seul mot courant en commun ne fait pas une saga
+        assertEquals(0.0, Repo.closeness(p("La nuit des morts vivants"), p("Une nuit au musée"), idf), 0.0)
+    }
+
     @Test(expected = java.io.IOException::class) fun pasUneM3u() { Repo.m3u(sequenceOf("<html>erreur</html>")) }
 }

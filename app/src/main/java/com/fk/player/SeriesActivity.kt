@@ -65,13 +65,13 @@ class SeriesActivity : BaseActivity() {
             playChoice(list, i, serie.name)
         }
         el.adapter = epAd
-        similarRow(findViewById(R.id.similar), serie, 90)
-        findViewById<View>(R.id.simTitle).visibility = findViewById<RecyclerView>(R.id.similar).visibility
+        findViewById<View>(R.id.similar).visibility = View.GONE; findViewById<View>(R.id.simTitle).visibility = View.GONE
 
         lifecycleScope.launch {
             try {
                 val info = Repo.seriesInfo(serie.id)
                 findViewById<View>(R.id.loading).visibility = View.GONE
+                similarRow(findViewById(R.id.similar), findViewById(R.id.simTitle), serie, 90, info.info)
                 findViewById<TextView>(R.id.plot).text = info.info.plot ?: ""
                 findViewById<TextView>(R.id.meta).text = listOfNotNull(info.info.year, info.info.genre, serie.rating?.let { "★ $it" }).joinToString("  ·  ")
                 if (cover == null && info.info.cover != null) { cover = info.info.cover; findViewById<ImageView>(R.id.cover).load(info.info.cover) }
@@ -93,6 +93,7 @@ class SeriesActivity : BaseActivity() {
             } catch (e: Exception) {
                 findViewById<View>(R.id.loading).visibility = View.GONE
                 findViewById<TextView>(R.id.plot).text = "Impossible de charger la série : ${e.message}"
+                similarRow(findViewById(R.id.similar), findViewById(R.id.simTitle), serie, 90, null)
             }
         }
     }

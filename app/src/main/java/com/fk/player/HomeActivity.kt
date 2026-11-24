@@ -66,7 +66,6 @@ class HomeActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         refreshTexts()
-        Updater.check(this)
     }
 
     private fun refreshTexts() {

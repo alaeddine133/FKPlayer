@@ -238,7 +238,7 @@ object Repo {
         }
         synchronized(epgCache) { epgCache.clear() }
         val old = System.currentTimeMillis() - 7 * 24 * 3600_000L
-        cacheDir().listFiles()?.forEach { if (it.name.startsWith("serie_") && it.lastModified() < old) it.delete() }
+        cacheDir().listFiles()?.forEach { if ((it.name.startsWith("serie_") || it.name.startsWith("vinfo_")) && it.lastModified() < old) it.delete() }
         loaded = true
     }
 
@@ -320,7 +320,9 @@ object Repo {
         objects(f) { o ->
             out += Item(Type.MOVIE, o.s("stream_id"), o.s("name").trim(), o.s("stream_icon").ifBlank { null },
                 o.s("category_id"), ext = o.s("container_extension").ifBlank { "mp4" }, rating = rating(o.s("rating")),
-                added = o.s("added").toLongOrNull() ?: 0)
+                added = o.s("added").toLongOrNull() ?: 0, genre = o.s("genre").ifBlank { null },
+                people = (o.s("cast") + "," + o.s("director")).trim(',').ifBlank { null },
+                year = (o.s("year").ifBlank { o.s("releaseDate") }).take(4).toIntOrNull() ?: 0)
         }
         return out
     }
@@ -329,7 +331,9 @@ object Repo {
         val out = ArrayList<Item>()
         objects(f) { o ->
             out += Item(Type.SERIES, o.s("series_id"), o.s("name").trim(), o.s("cover").ifBlank { null },
-                o.s("category_id"), rating = rating(o.s("rating")), added = o.s("last_modified").toLongOrNull() ?: 0)
+                o.s("category_id"), rating = rating(o.s("rating")), added = o.s("last_modified").toLongOrNull() ?: 0,
+                genre = o.s("genre").ifBlank { null }, people = (o.s("cast") + "," + o.s("director")).trim(',').ifBlank { null },
+                year = (o.s("releaseDate").ifBlank { o.s("release_date") }).take(4).toIntOrNull() ?: 0)
         }
         return out
     }
@@ -381,10 +385,95 @@ object Repo {
         return id.takeIf { it.matches(Regex("[\\w-]{6,20}")) }
     }
 
+    /** Fiche d'un film, gardée sur la box 24 h (sert aussi aux titres similaires). */
     suspend fun vodInfo(id: String): Info? {
         if (!isXtream) return null
-        return try { withContext(Dispatchers.Default) { info(JSONObject(get(api("get_vod_info", "&vod_id=$id"))).optJSONObject("info")) } }
-        catch (e: Exception) { null }
+        return try {
+            val f = fetch("vinfo_$id", api("get_vod_info", "&vod_id=$id"), preferCache = true)
+            withContext(Dispatchers.Default) { info(JSONObject(f.readText()).optJSONObject("info")) }
+        } catch (e: Exception) { null }
+    }
+
+    /* ---------- Titres similaires ---------- */
+
+    // Mots qui ne disent rien du film : langue, qualité, petits mots, « saison », « partie »…
+    private val noise = setOf(
+        "the", "les", "des", "une", "and", "von", "der", "die", "das", "del", "los", "las", "film", "movie", "serie", "series",
+        "saison", "season", "part", "partie", "vol", "chapitre", "chapter", "vostfr", "vff", "vfq", "multi", "fhd", "uhd", "hdr",
+        "1080p", "720p", "2160p", "french", "truefrench", "sub", "dub", "integrale", "complete", "collection", "edition", "version",
+        "extended", "remastered", "cut", "eng", "ara", "deu", "ger", "ita", "esp", "spa", "por", "tur", "pol", "nld", "rus"
+    )
+    // Genres anglais → français, pour comparer des fiches écrites dans les deux langues
+    private val genreFr = mapOf(
+        "comedy" to "comedie", "drama" to "drame", "horror" to "horreur", "adventure" to "aventure", "family" to "familial",
+        "famille" to "familial", "war" to "guerre", "documentary" to "documentaire", "mystery" to "mystere", "fantasy" to "fantastique",
+        "music" to "musique", "history" to "histoire", "science fiction" to "sf", "science-fiction" to "sf", "sci-fi" to "sf",
+        "sci-fi & fantasy" to "sf", "action & adventure" to "action", "kids" to "enfants", "policier" to "crime", "romantique" to "romance"
+    )
+
+    /** Mots qui identifient un titre (sans langue, qualité, année ni numéro). */
+    fun titleWords(name: String): Set<String> = Regex("[a-z0-9]+").findAll(norm(name)).map { it.value }
+        .filter { it.length >= 3 && it !in noise && !it.all(Char::isDigit) && it != "4k" }.toSet()
+
+    fun genres(s: String?): Set<String> = s.orEmpty().split(',', '/', '|', ';').map { norm(it).trim() }
+        .filter { it.length >= 3 }.map { genreFr[it] ?: it }.toSet()
+
+    fun people(s: String?): Set<String> = s.orEmpty().split(',').map { norm(it).trim() }.filter { it.length >= 4 }.toSet()
+
+    class Profile(val words: Set<String>, val genres: Set<String>, val people: Set<String>, val year: Int)
+
+    /**
+     * Proximité entre deux titres (0 = aucun rapport) : même saga (mots rares du titre en commun), mêmes genres,
+     * mêmes acteurs / réalisateur, puis année proche pour départager.
+     */
+    fun closeness(a: Profile, b: Profile, idf: (String) -> Double): Double {
+        val title = if (a.words.isEmpty()) 0.0 else a.words.filter { it in b.words }.sumOf(idf) / a.words.sumOf(idf)
+        val gen = if (a.genres.isEmpty() || b.genres.isEmpty()) 0.0 else a.genres.count { it in b.genres }.toDouble() / (a.genres + b.genres).size
+        val ppl = a.people.count { it in b.people }.coerceAtMost(3) / 3.0
+        if (title < 0.5 && gen == 0.0 && ppl == 0.0) return 0.0  // seul le rayon en commun : pas similaire
+        val yr = if (a.year > 0 && b.year > 0) (1 - kotlin.math.abs(a.year - b.year) / 15.0).coerceAtLeast(0.0) else 0.0
+        return 5 * title + 3 * gen + 3 * ppl + 0.5 * yr
+    }
+
+    /** Mots de chaque titre (calculés une fois) + rareté de chaque mot : « batman » compte plus que « nuit ». */
+    private class SimIndex(val pool: List<Item>, val words: Map<String, Set<String>>, val idf: Map<String, Double>)
+    @Volatile private var simIndex: SimIndex? = null
+
+    private fun indexOf(pool: List<Item>): SimIndex {
+        simIndex?.let { if (it.pool === pool) return it }
+        val words = HashMap<String, Set<String>>(pool.size)
+        val df = HashMap<String, Int>()
+        pool.forEach { x -> titleWords(x.name).also { words[x.key] = it }.forEach { w -> df[w] = (df[w] ?: 0) + 1 } }
+        val n = pool.size.toDouble()
+        return SimIndex(pool, words, df.mapValues { (_, c) -> kotlin.math.ln(1 + n / c) }).also { simIndex = it }
+    }
+
+    private fun profile(x: Item, i: Info?, words: Map<String, Set<String>>? = null) = Profile(
+        words?.get(x.key) ?: titleWords(x.name), genres(i?.genre ?: x.genre),
+        people(listOfNotNull(i?.cast, i?.director, x.people).joinToString(",")), i?.year?.toIntOrNull() ?: x.year
+    )
+
+    /** Titres vraiment proches de celui affiché (vide si on ne trouve rien de pertinent). */
+    suspend fun similar(of: Item, info: Info?): List<Item> = withContext(Dispatchers.Default) {
+        val pool = if (of.type == Type.SERIES) series else vod
+        val ix = indexOf(pool)
+        val idf = { w: String -> ix.idf[w] ?: 1.0 }
+        val me = profile(of, info)
+        val others = pool.filter { it.id != of.id }
+        fun prof(x: Item, i: Info?) = profile(x, i, ix.words)
+        // Films sans genre dans la liste du serveur : on lit la fiche (gardée sur la box) de 40 candidats au plus
+        val extra = HashMap<String, Info>()
+        if (of.type == Type.MOVIE && isXtream && others.none { it.genre != null } && (me.genres.isNotEmpty() || me.people.isNotEmpty())) {
+            val cands = (others.filter { closeness(me, prof(it, null), idf) > 0 } + others.filter { it.catId == of.catId }).distinct().take(40)
+            cands.chunked(6).forEach { group ->
+                coroutineScope { group.map { x -> async { vodInfo(x.id)?.let { x.id to it } } }.map { it.await() } }
+                    .filterNotNull().forEach { (id, i) -> extra[id] = i }
+            }
+        }
+        others.map { it to closeness(me, prof(it, extra[it.id]), idf) }.filter { it.second > 0 }
+            .sortedWith(compareByDescending<Pair<Item, Double>> { it.second }
+                .thenByDescending { it.first.rating?.replace(',', '.')?.toDoubleOrNull() ?: 0.0 })
+            .take(20).map { it.first }
     }
 
     data class SeriesInfo(val info: Info, val seasons: Map<Int, List<Episode>>)

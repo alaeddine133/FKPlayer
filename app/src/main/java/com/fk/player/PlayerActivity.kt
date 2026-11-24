@@ -36,6 +36,7 @@ import java.util.Locale
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : BaseActivity() {
+    override val checksUpdates = false
 
     private lateinit var pv: PlayerView
     private var player: ExoPlayer? = null

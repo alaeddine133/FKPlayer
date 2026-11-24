@@ -31,12 +31,13 @@ class DetailActivity : BaseActivity() {
         findViewById<View>(R.id.btnResume).setOnClickListener { play(listOf(movie), 0) }
         findViewById<View>(R.id.btnStart).setOnClickListener { Prefs.clearPos(movie.key); play(listOf(movie), 0) }
 
-        similarRow(findViewById(R.id.similar), movie, 110)
-        findViewById<View>(R.id.simTitle).visibility = findViewById<RecyclerView>(R.id.similar).visibility
         findViewById<View>(R.id.btnResume).requestFocus()
 
         lifecycleScope.launch {
-            val i = Repo.vodInfo(movie.id) ?: return@launch
+            val i = Repo.vodInfo(movie.id)
+            // Genres, acteurs et réalisateur de la fiche servent à trouver les titres proches
+            similarRow(findViewById(R.id.similar), findViewById(R.id.simTitle), movie, 110, i)
+            i ?: return@launch
             findViewById<TextView>(R.id.plot).text = i.plot ?: ""
             findViewById<TextView>(R.id.meta).text = listOfNotNull(i.year, i.genre, i.duration, movie.rating?.let { "★ $it" }).joinToString("  ·  ")
             findViewById<TextView>(R.id.cast).text = listOfNotNull(i.director?.let { "Réalisation : $it" }, i.cast?.let { "Avec : $it" }).joinToString("\n")

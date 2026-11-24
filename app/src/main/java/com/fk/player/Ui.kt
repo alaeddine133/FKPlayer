@@ -16,8 +16,10 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatImageView
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -155,7 +157,13 @@ open class BaseActivity : AppCompatActivity() {
         Repo.init(applicationContext)
     }
 
-    override fun onResume() { super.onResume(); ui.post(tick); aurora() }
+    /** Le lecteur et l'écran de démarrage n'affichent pas la fenêtre de mise à jour (pas d'interruption de la vidéo). */
+    open val checksUpdates = true
+
+    override fun onResume() {
+        super.onResume(); ui.post(tick); aurora()
+        if (checksUpdates && Repo.loaded) Updater.check(this)
+    }
     override fun onPause() { super.onPause(); ui.removeCallbacks(tick) }
     override fun onDestroy() { super.onDestroy(); ui.removeCallbacksAndMessages(null) }
 
@@ -210,10 +218,18 @@ open class BaseActivity : AppCompatActivity() {
         toast("Installe l'appli YouTube pour voir les bandes-annonces")
     }
 
-    /** Rangée d'affiches « Titres similaires » (même catégorie). */
-    fun similarRow(rv: RecyclerView, of: Item, width: Int) {
-        val pool = when (of.type) { Type.SERIES -> Repo.serByCat; else -> Repo.vodByCat }[of.catId] ?: emptyList()
-        val list = pool.filter { it.id != of.id }.take(30)
+    /** Rangée « Titres similaires » : affichée seulement si des titres vraiment proches sont trouvés. */
+    fun similarRow(rv: RecyclerView, title: View, of: Item, width: Int, info: Repo.Info?) {
+        rv.visibility = View.GONE; title.visibility = View.GONE
+        lifecycleScope.launch {
+            val list = try { Repo.similar(of, info) } catch (e: Exception) { emptyList() }
+            if (isFinishing || isDestroyed || list.isEmpty()) return@launch
+            fillSimilar(rv, list, width)
+            rv.visibility = View.VISIBLE; title.visibility = View.VISIBLE
+        }
+    }
+
+    private fun fillSimilar(rv: RecyclerView, list: List<Item>, width: Int) {
         rv.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this, androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, false)
         val ad = Adapter<Item>(R.layout.item_poster, 1.07f) { v, x, _ ->
             v.layoutParams = v.layoutParams.apply { this.width = dp(width) }
@@ -227,7 +243,6 @@ open class BaseActivity : AppCompatActivity() {
         ad.onClick = { _, i -> open(list, i); finish() }
         ad.items = list
         rv.adapter = ad
-        rv.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
     }
 
     /** Ouvre un contenu : chaîne/épisode → lecteur ; film → fiche film ; série → fiche série. */

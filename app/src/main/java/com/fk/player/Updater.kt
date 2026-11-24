@@ -25,7 +25,8 @@ object Updater {
     private var busy = false
 
     fun check(a: BaseActivity, manual: Boolean = false) {
-        if (busy || (!manual && System.currentTimeMillis() - lastCheck < 6 * 3600_000L)) return
+        // Vérifié sur chaque écran (hors lecteur), au plus toutes les 15 min : la box garde souvent l'appli ouverte des jours
+        if (busy || (!manual && System.currentTimeMillis() - lastCheck < 15 * 60_000L)) return
         lastCheck = System.currentTimeMillis()
         a.lifecycleScope.launch {
             val o = try { JSONObject(Repo.get(INFO + "?t=" + System.currentTimeMillis() / 600_000)) } catch (e: Exception) {

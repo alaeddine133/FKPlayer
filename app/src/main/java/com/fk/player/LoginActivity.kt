@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
  * sinon formulaire + QR code pour saisir ses codes depuis le téléphone.
  */
 class LoginActivity : BaseActivity() {
+    override val checksUpdates = false
 
     private lateinit var splash: View
     private lateinit var splashStatus: TextView
