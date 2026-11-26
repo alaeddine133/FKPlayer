@@ -111,7 +111,7 @@ button{width:100%;margin-top:12px;padding:15px;border:0;border-radius:26px;font-
 <form method="post" class="card" autocomplete="off">
 <div class="tabs"><label><input type="radio" name="mode" value="xtream" checked onchange="sw()"><span>Xtream Codes</span></label>
 <label><input type="radio" name="mode" value="m3u" onchange="sw()"><span>Lien M3U</span></label></div>
-<div id="x"><input type="url" name="server" placeholder="Serveur (http://exemple.com:8080)" inputmode="url" autocapitalize="off">
+<div id="x"><input type="url" name="server" placeholder="Adresse du serveur (http://exemple.com:8080)" inputmode="url" autocapitalize="off">
 <input type="text" name="user" placeholder="Nom d'utilisateur" autocapitalize="off" autocorrect="off">
 <input type="password" id="pw" name="pass" placeholder="Mot de passe" autocapitalize="off" autocorrect="off">
 <label class="show"><input type="checkbox" onchange="document.getElementById('pw').type=this.checked?'text':'password'"> Afficher le mot de passe</label></div>

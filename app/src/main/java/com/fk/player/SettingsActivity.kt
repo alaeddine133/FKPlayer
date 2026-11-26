@@ -56,7 +56,7 @@ class SettingsActivity : BaseActivity() {
             Row("Épisode suivant automatique", "Enchaîne les épisodes d'une série", { if (Prefs.autoNext) "Oui" else "Non" }) {
                 Prefs.autoNext = !Prefs.autoNext
             },
-            Row("Catégories françaises en premier", "Appliqué à la prochaine actualisation", { if (Prefs.frFirst) "Oui" else "Non" }) {
+            Row("Bouquets et catégories français en premier", "Appliqué à la prochaine actualisation", { if (Prefs.frFirst) "Oui" else "Non" }) {
                 Prefs.frFirst = !Prefs.frFirst
             },
             if (!Repo.isXtream) null else Row("Adresses de secours du serveur", "Si le serveur ne répond plus, FK PLAYER essaie ces adresses toute seule",
@@ -82,7 +82,7 @@ class SettingsActivity : BaseActivity() {
         findViewById<TextView>(R.id.version).text = "FK PLAYER · version ${packageManager.getPackageInfo(packageName, 0).versionName}"
         val exp = Repo.expDate?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRANCE).format(java.util.Date(it)) }
         findViewById<TextView>(R.id.account).text = if (Repo.isXtream) {
-            "Serveur : ${Prefs.server}\nUtilisateur : ${Prefs.user}\nExpire le : ${exp ?: "illimité"}" +
+            "Adresse du serveur : ${Prefs.server}\nUtilisateur : ${Prefs.user}\nExpire le : ${exp ?: "illimité"}" +
                 (Repo.maxConnections?.let { "\nConnexions max : $it" } ?: "") +
                 "\n\n${Repo.live.size} chaînes · ${Repo.vod.size} films · ${Repo.series.size} séries"
         } else {
@@ -124,7 +124,7 @@ class SettingsActivity : BaseActivity() {
     private fun logout() {
         AlertDialog.Builder(this)
             .setTitle("Changer de compte ?")
-            .setMessage("Tes favoris et réglages sont conservés.")
+            .setMessage("Ta liste et tes réglages sont conservés.")
             .setPositiveButton("Déconnexion") { _, _ ->
                 Prefs.logout(); Repo.loaded = false
                 startActivity(Intent(this, LoginActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))

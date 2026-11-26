@@ -241,7 +241,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="OK : plein écran  ·  Appui long / Menu : favori  ·  Replay : ▶ puis ▼"
+                        android:text="OK : plein écran  ·  Appui long / Menu : Ma liste  ·  Replay : ▶ puis ▼"
                         android:textColor="@color/muted"
                         android:textSize="10sp" />
                 </LinearLayout>

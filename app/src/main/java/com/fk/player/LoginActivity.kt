@@ -123,7 +123,7 @@ class LoginActivity : BaseActivity() {
             Prefs.m3u = linkTxt
         } else {
             val s = server.text.toString(); val u = user.text.toString().trim(); val p = pass.text.toString().trim()
-            if (s.isBlank() || u.isBlank() || p.isBlank()) { status.text = "Remplis le serveur, l'utilisateur et le mot de passe"; return }
+            if (s.isBlank() || u.isBlank() || p.isBlank()) { status.text = "Remplis l'adresse du serveur, l'utilisateur et le mot de passe"; return }
             Prefs.newServer(Repo.cleanServer(s)); Prefs.user = u; Prefs.pass = p; Prefs.mode = "xtream"
         }
         connect(preferCache = false)
@@ -135,7 +135,7 @@ class LoginActivity : BaseActivity() {
         job = lifecycleScope.launch {
             try {
                 Repo.load(preferCache) { msg -> runOnUiThread { splashStatus.text = msg } }
-                if (Repo.live.isEmpty() && Repo.vod.isEmpty() && Repo.series.isEmpty()) throw Exception("aucun contenu trouvé sur ce compte")
+                if (Repo.live.isEmpty() && Repo.vod.isEmpty() && Repo.series.isEmpty()) throw Exception("aucun contenu trouvé sur cet abonnement")
                 stopLink()
                 startActivity(Intent(this@LoginActivity, HomeActivity::class.java).putExtra("refresh", Repo.fromCache))
                 finish()

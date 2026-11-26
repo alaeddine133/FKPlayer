@@ -193,7 +193,7 @@
                     android:id="@+id/server"
                     style="@style/Field"
                     android:layout_marginTop="16dp"
-                    android:hint="Serveur  (http://exemple.com:8080)"
+                    android:hint="Adresse du serveur  (http://exemple.com:8080)"
                     android:imeOptions="actionNext"
                     android:inputType="textUri" />
 

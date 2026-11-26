@@ -51,7 +51,7 @@ class LiveActivity : BaseActivity() {
         pulse(findViewById(R.id.liveDot))
 
         Repo.liveByCat.forEach { (k, v) -> counts[k] = v.size }
-        cats = listOf(Category(FAV, "Favoris"), Category(ALL, "Toutes les chaînes")) + Repo.liveCats
+        cats = listOf(Category(FAV, "Ma liste"), Category(ALL, "Toutes les chaînes")) + Repo.liveCats
 
         catList = findViewById<RecyclerView>(R.id.cats).fast(); chList = findViewById<RecyclerView>(R.id.chans).fast()
         pv = findViewById(R.id.previewVideo)

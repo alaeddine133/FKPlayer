@@ -311,8 +311,8 @@ class PlayerActivity : BaseActivity() {
         PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> when ((e.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode) {
             401, 403 -> "Accès refusé : abonnement expiré ou trop d'appareils connectés"
             404 -> "Chaîne introuvable sur le serveur"
-            429, 456, 458, 509 -> "Trop de connexions en même temps sur ce compte"
-            in 500..599 -> "Le serveur IPTV a un problème, réessaie dans un moment"
+            429, 456, 458, 509 -> "Trop de connexions en même temps sur cet abonnement"
+            in 500..599 -> "Le serveur du fournisseur a un problème, réessaie dans un moment"
             else -> "Flux refusé par le serveur"
         }
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
@@ -460,7 +460,7 @@ class PlayerActivity : BaseActivity() {
             pv.requestFocus()
             return
         }
-        if (pCatList.isEmpty()) pCatList = listOf(Category(LiveActivity.FAV, "Favoris"), Category(LiveActivity.ALL, "Toutes les chaînes")) + Repo.liveCats
+        if (pCatList.isEmpty()) pCatList = listOf(Category(LiveActivity.FAV, "Ma liste"), Category(LiveActivity.ALL, "Toutes les chaînes")) + Repo.liveCats
         // On ouvre sur le bouquet de la chaîne en cours
         pSel = pCatList.indexOfFirst { it.id == Prefs.lastLiveCat && chansOf(it).any { c -> c.id == cur.id } }.takeIf { it >= 0 } ?: 1
         pCatAd.items = pCatList
