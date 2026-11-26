@@ -23,6 +23,7 @@ object Updater {
     private const val INFO = "https://raw.githubusercontent.com/alaeddine133/FKPlayer/main/version.json"
     private var lastCheck = 0L
     private var busy = false
+    private var declined = 0L
 
     fun check(a: BaseActivity, manual: Boolean = false) {
         // Vérifié sur chaque écran (hors lecteur), au plus toutes les 15 min : la box garde souvent l'appli ouverte des jours
@@ -34,12 +35,14 @@ object Updater {
             }
             val cur = PackageInfoCompat.getLongVersionCode(a.packageManager.getPackageInfo(a.packageName, 0))
             if (o.optLong("code") <= cur) { if (manual) a.toast("FK PLAYER est à jour"); return@launch }
+            // « Plus tard » : plus reproposé jusqu'au prochain démarrage de l'appli (sauf demande dans Paramètres)
+            if (!manual && o.optLong("code") == declined) return@launch
             if (a.isFinishing) return@launch
             AlertDialog.Builder(a)
                 .setTitle("Nouvelle version ${o.optString("name")} disponible")
                 .setMessage(o.optString("notes").ifBlank { "Améliorations et corrections." })
                 .setPositiveButton("Mettre à jour") { _, _ -> install(a, o.optString("url")) }
-                .setNegativeButton("Plus tard", null)
+                .setNegativeButton("Plus tard") { _, _ -> declined = o.optLong("code") }
                 .showTv()
         }
     }

@@ -66,6 +66,15 @@ class RepoTest {
             Repo.candidates("http://old.tv:80", "http://new.tv:80", "s1.tv:8080\n\nhttp://old.tv:80, https://s2.tv"))
     }
 
+    @Test fun renvois() {
+        val fin = "http://new.tv:8080/player_api.php?username=u&password=p"
+        assertEquals("http://new.tv:8080", Repo.movedTo(listOf(301), fin))       // définitif : on change d'adresse
+        assertEquals("http://new.tv:8080", Repo.movedTo(listOf(308, 301), fin))
+        assertNull(Repo.movedTo(listOf(302), fin))                               // provisoire : on garde l'adresse
+        assertNull(Repo.movedTo(listOf(301, 302), fin))                          // un seul renvoi provisoire suffit
+        assertNull(Repo.movedTo(emptyList(), fin))                               // pas de renvoi
+    }
+
     @Test fun similaires() {
         // Langue, qualité, année et numéro ne comptent pas
         assertEquals(setOf("fast", "furious"), Repo.titleWords("FR - Fast & Furious 7 (2015) 4K MULTI"))

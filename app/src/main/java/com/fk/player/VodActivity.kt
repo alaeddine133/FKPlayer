@@ -24,6 +24,22 @@ class VodActivity : BaseActivity() {
     private lateinit var catAd: Adapter<Category>
     private lateinit var gridAd: Adapter<Item>
     private lateinit var grid: RecyclerView
+    private lateinit var catList: RecyclerView
+
+    /** Motion 3D : ▲ depuis une affiche ramène directement sur la catégorie en cours (sinon ◀ x fois le carrousel). */
+    override fun dispatchKeyEvent(e: android.view.KeyEvent): Boolean {
+        if (Fx3d.on && e.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && ::grid.isInitialized && grid.hasFocus()) {
+            if (e.action == android.view.KeyEvent.ACTION_DOWN) {
+                val lm = catList.layoutManager as LinearLayoutManager
+                lm.findViewByPosition(selCat)?.requestFocus() ?: run {
+                    catList.scrollToPosition(selCat)
+                    catList.post { lm.findViewByPosition(selCat)?.requestFocus() }
+                }
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(e)
+    }
     private lateinit var empty: TextView
     private var cats: List<Category> = emptyList()
     private val counts = HashMap<String, Int>()
@@ -62,7 +78,7 @@ class VodActivity : BaseActivity() {
                 }.show()
         }
 
-        val catList = findViewById<RecyclerView>(R.id.cats).fast()
+        catList = findViewById<RecyclerView>(R.id.cats).fast()
         grid.fast()
         catList.layoutManager = LinearLayoutManager(this)
         catAd = Adapter(R.layout.item_cat, 1.03f) { v, c, i ->

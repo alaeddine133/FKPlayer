@@ -102,28 +102,39 @@ object Repo {
      * par le serveur, puis adresses de secours. La première qui répond devient l'adresse du compte.
      */
     private suspend fun authOnline(): String = withContext(Dispatchers.IO) {
-        var last: Exception = IOException("serveur injoignable")
+        var first: Exception? = null  // l'erreur de l'adresse saisie est la plus parlante pour l'utilisateur
         for (s in candidates(Prefs.server, Prefs.announced, Prefs.backups)) {
             try {
                 val req = Request.Builder().url(apiAt(s, null)).header("User-Agent", FkPlayer.userAgent()).build()
                 val (body, moved) = http.newCall(req).execute().use { r ->
                     if (!r.isSuccessful) throw IOException("le serveur répond ${r.code}")
-                    var p = r.priorResponse; var permanent = false
-                    while (p != null) { if (p.code == 301 || p.code == 308) permanent = true; p = p.priorResponse }
-                    (r.body?.string() ?: "") to (if (permanent) origin(r.request.url.toString()) else null)
+                    val codes = generateSequence(r.priorResponse) { it.priorResponse }.map { it.code }.toList()
+                    (r.body?.string() ?: "") to movedTo(codes, r.request.url.toString())
                 }
                 val o = JSONObject(body)  // page d'erreur ou domaine abandonné : pas du JSON → adresse suivante
                 if (!o.has("user_info")) throw IOException("réponse invalide du serveur")
+                // Codes refusés : on garde l'adresse saisie (et son message) ; une autre adresse ne devient jamais celle du compte
+                if (o.optJSONObject("user_info")?.optInt("auth", 0) != 1) {
+                    if (s == Prefs.server) return@withContext body
+                    throw IOException("codes refusés par $s")
+                }
                 switchTo(moved ?: s)
                 o.optJSONObject("server_info")?.let { si ->
                     announced(si.optString("server_protocol"), si.optString("url"), si.optString("port"), si.optString("https_port"))
                         ?.let { if (it != Prefs.server) Prefs.announced = it }
                 }
                 return@withContext body
-            } catch (e: Exception) { last = e }
+            } catch (e: Exception) { if (first == null) first = e }
         }
-        throw last
+        throw first ?: IOException("serveur injoignable")
     }
+
+    /**
+     * Nouvelle adresse du serveur après des renvois (codes HTTP, du premier au dernier), sinon null.
+     * Seuls des renvois tous définitifs (301 / 308) changent l'adresse : un 302 mène souvent à un serveur provisoire.
+     */
+    fun movedTo(codes: List<Int>, finalUrl: String): String? =
+        if (codes.isNotEmpty() && codes.all { it == 301 || it == 308 }) origin(finalUrl) else null
 
     private fun switchTo(s: String) {
         if (s == Prefs.server) return
