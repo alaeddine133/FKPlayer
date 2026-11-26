@@ -1,6 +1,6 @@
 {
-  "code": 18,
-  "name": "2.7",
+  "code": 19,
+  "name": "2.8",
   "url": "https://github.com/alaeddine133/FKPlayer/raw/main/FKPlayer.apk",
-  "notes": "Mêmes mots partout : « Ma liste » (au lieu de « Favoris »), « Adresse du serveur », bouquets pour les chaînes, catégories pour les films et séries."
+  "notes": "Nouveau thème Ambilight : le fond prend la couleur du film choisi. Paramètres → Thème (Mosaïque → Motion 3D → Ambilight)."
 }

@@ -158,10 +158,12 @@ open class BaseActivity : AppCompatActivity() {
         Repo.init(applicationContext)
     }
 
-    /** Motion 3D : fond bleu nuit en profondeur (le lecteur garde son fond noir). */
+    /** Fond selon le thème : bleu nuit (Motion 3D) ou couleur de l'affiche (Ambilight). Le lecteur garde son fond noir. */
     override fun setContentView(layoutResID: Int) {
         super.setContentView(layoutResID)
-        if (Fx3d.on && this !is PlayerActivity) findViewById<ViewGroup>(android.R.id.content).getChildAt(0)?.setBackgroundResource(R.drawable.bg_3d)
+        if (this is PlayerActivity) return
+        val root = findViewById<ViewGroup>(android.R.id.content).getChildAt(0) ?: return
+        if (Fx3d.on) root.setBackgroundResource(R.drawable.bg_3d) else if (Ambi.on) Ambi.install(this, root)
     }
 
     /** Le lecteur et l'écran de démarrage n'affichent pas la fenêtre de mise à jour (pas d'interruption de la vidéo). */

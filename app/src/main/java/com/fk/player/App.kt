@@ -17,6 +17,8 @@ class App : Application(), ImageLoaderFactory {
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             try { crashFile(this).writeText("${java.util.Date()}\n${android.util.Log.getStackTraceString(e)}") } catch (_: Throwable) { }
+            // Filet de sécurité : un thème qui planterait ne doit jamais bloquer l'appli à chaque démarrage
+            try { Prefs.resetThemeNow() } catch (_: Throwable) { }
             prev?.uncaughtException(t, e)
         }
     }
@@ -125,8 +127,10 @@ object Prefs {
     var autoNext: Boolean get() = sp.getBoolean("next", true); set(v) = putB("next", v)
     var frFirst: Boolean get() = sp.getBoolean("frfirst", true); set(v) = putB("frfirst", v)
     var sort: Int get() = sp.getInt("sort", Repo.SORT_RECENT); set(v) = putI("sort", v)
-    /** 0 = Mosaïque, 1 = Motion 3D */
+    /** 0 = Mosaïque, 1 = Motion 3D, 2 = Ambilight */
     var theme: Int get() = sp.getInt("theme", 0); set(v) = putI("theme", v)
+    /** Retour au thème Mosaïque, écrit tout de suite (appelé quand l'appli plante). */
+    fun resetThemeNow() { if (theme != 0) sp.edit().putInt("theme", 0).commit() }
 
     // Dernière chaîne regardée
     var lastLiveId: String get() = str("lastId"); set(v) = putS("lastId", v)

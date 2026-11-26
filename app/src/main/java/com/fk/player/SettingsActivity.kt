@@ -16,7 +16,9 @@ class SettingsActivity : BaseActivity() {
 
     private lateinit var ad: Adapter<Row>
 
-    private val langs = listOf("fr" to "Français", "en" to "Anglais", "ar" to "Arabe", "orig" to "Version originale")
+    private val themes = arrayOf("Mosaïque", "Motion 3D", "Ambilight")
+
+    private val langs =listOf("fr" to "Français", "en" to "Anglais", "ar" to "Arabe", "orig" to "Version originale")
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -25,8 +27,8 @@ class SettingsActivity : BaseActivity() {
         setTop("Paramètres")
 
         val rows = listOfNotNull(
-            Row("Thème", "Mosaïque : tuiles classiques · Motion 3D : carrousels en relief", { if (Prefs.theme == 1) "Motion 3D" else "Mosaïque" }) {
-                Prefs.theme = 1 - Prefs.theme
+            Row("Thème", "Mosaïque : tuiles · Motion 3D : carrousels en relief · Ambilight : fond à la couleur du film", { themes[Prefs.theme.coerceIn(0, 2)] }) {
+                Prefs.theme = (Prefs.theme + 1) % themes.size
                 // Tous les écrans sont redessinés avec le nouveau thème, en repartant de l'accueil
                 startActivity(Intent(this, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 finish()

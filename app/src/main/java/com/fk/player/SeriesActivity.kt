@@ -32,7 +32,7 @@ class SeriesActivity : BaseActivity() {
 
         findViewById<TextView>(R.id.title).text = serie.name
         findViewById<TextView>(R.id.meta).text = serie.rating?.let { "★ $it" } ?: ""
-        serie.icon?.let { findViewById<ImageView>(R.id.cover).load(it) { crossfade(true) }; findViewById<ImageView>(R.id.backdrop).load(it) }
+        serie.icon?.let { findViewById<ImageView>(R.id.cover).load(it) { crossfade(true); listener(onSuccess = { _, r -> Ambi.tint(this@SeriesActivity, r.drawable) }) }; findViewById<ImageView>(R.id.backdrop).load(it) }
         val favBtn = findViewById<TextView>(R.id.favBtn)
         fun favLabel() { val f = Prefs.isFav(serie.key); favBtn.text = if (f) "Dans Ma liste" else "Ajouter à Ma liste"; favBtn.isActivated = f }
         favLabel()
@@ -76,7 +76,7 @@ class SeriesActivity : BaseActivity() {
                 similarRow(findViewById(R.id.similar), findViewById(R.id.simTitle), serie, 90, info.info)
                 findViewById<TextView>(R.id.plot).text = info.info.plot ?: ""
                 findViewById<TextView>(R.id.meta).text = listOfNotNull(info.info.year, info.info.genre, serie.rating?.let { "★ $it" }).joinToString("  ·  ")
-                if (cover == null && info.info.cover != null) { cover = info.info.cover; findViewById<ImageView>(R.id.cover).load(info.info.cover) }
+                if (cover == null && info.info.cover != null) { cover = info.info.cover; findViewById<ImageView>(R.id.cover).load(info.info.cover) { listener(onSuccess = { _, r -> Ambi.tint(this@SeriesActivity, r.drawable) }) } }
                 info.info.backdrop?.let { findViewById<ImageView>(R.id.backdrop).load(it) { crossfade(true) } }
                 findViewById<TextView>(R.id.cast).text = listOfNotNull(info.info.director?.let { "Réalisation : $it" }, info.info.cast?.let { "Avec : $it" }).joinToString("\n")
                 info.info.trailer?.let { t -> findViewById<View>(R.id.trailerBtn).apply { visibility = View.VISIBLE; setOnClickListener { trailer(t) } } }

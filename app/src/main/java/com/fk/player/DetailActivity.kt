@@ -22,7 +22,7 @@ class DetailActivity : BaseActivity() {
 
         findViewById<TextView>(R.id.title).text = movie.name
         findViewById<TextView>(R.id.meta).text = movie.rating?.let { "★ $it" } ?: ""
-        movie.icon?.let { findViewById<ImageView>(R.id.cover).load(it) { crossfade(true) }; findViewById<ImageView>(R.id.backdrop).load(it) }
+        movie.icon?.let { findViewById<ImageView>(R.id.cover).load(it) { crossfade(true); listener(onSuccess = { _, r -> Ambi.tint(this@DetailActivity, r.drawable) }) }; findViewById<ImageView>(R.id.backdrop).load(it) }
 
         val favBtn = findViewById<TextView>(R.id.favBtn)
         fun favLabel() { favBtn.text = if (Prefs.isFav(movie.key)) "♥  Dans Ma liste" else "♡  Ma liste" }
@@ -42,7 +42,7 @@ class DetailActivity : BaseActivity() {
             findViewById<TextView>(R.id.plot).text = i.plot ?: ""
             findViewById<TextView>(R.id.meta).text = listOfNotNull(i.year, i.genre, i.duration, movie.rating?.let { "★ $it" }).joinToString("  ·  ")
             findViewById<TextView>(R.id.cast).text = listOfNotNull(i.director?.let { "Réalisation : $it" }, i.cast?.let { "Avec : $it" }).joinToString("\n")
-            if (movie.icon == null) i.cover?.let { findViewById<ImageView>(R.id.cover).load(it) }
+            if (movie.icon == null) i.cover?.let { findViewById<ImageView>(R.id.cover).load(it) { listener(onSuccess = { _, r -> Ambi.tint(this@DetailActivity, r.drawable) }) } }
             i.backdrop?.let { findViewById<ImageView>(R.id.backdrop).load(it) { crossfade(true) } }
             i.trailer?.let { t -> findViewById<View>(R.id.btnTrailer).apply { visibility = View.VISIBLE; setOnClickListener { trailer(t) } } }
         }
