@@ -184,7 +184,10 @@ class VodActivity : BaseActivity() {
         v.findViewById<TextView>(R.id.name).text = it.name
         if (it.icon != null) img.load(it.icon) { crossfade(true); listener(onError = { _, _ -> img.setImageDrawable(null) }) } else img.setImageDrawable(null)
         val badge = v.findViewById<TextView>(R.id.badge)
-        if (it.rating != null) { badge.text = "★ ${it.rating}"; badge.visibility = View.VISIBLE } else badge.visibility = View.GONE
+        // Série de Ma liste avec de nouveaux épisodes depuis la dernière visite de sa fiche
+        val isNew = it.type == Type.SERIES && Prefs.isFav(it.key) && Prefs.hasNew(it)
+        val txt = listOfNotNull(if (isNew) "Nouveau" else null, it.rating?.let { r -> "★ $r" }).joinToString(" · ")
+        if (txt.isNotEmpty()) { badge.text = txt; badge.visibility = View.VISIBLE } else badge.visibility = View.GONE
         v.findViewById<View>(R.id.fav).visibility = if (Prefs.isFav(it.key)) View.VISIBLE else View.GONE
         val pr = v.findViewById<ProgressBar>(R.id.resume)
         val p = Prefs.progress(it.key)

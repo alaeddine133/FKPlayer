@@ -129,6 +129,17 @@ object Prefs {
     var sort: Int get() = sp.getInt("sort", Repo.SORT_RECENT); set(v) = putI("sort", v)
     /** 0 = Mosaïque, 1 = Motion 3D, 2 = Ambilight */
     var theme: Int get() = sp.getInt("theme", 0); set(v) = putI("theme", v)
+    /** Synchro du son en ms (négatif = image retardée). */
+    var audioDelay: Int get() = sp.getInt("adelay", 0); set(v) = putI("adelay", v)
+
+    /** Séries de Ma liste : nouveaux épisodes depuis la dernière visite de la fiche (date « dernière modification » du fournisseur). */
+    fun hasNew(serie: Item): Boolean {
+        val seen = sp.getLong("s_${serie.id}", 0L)
+        if (seen == 0L) { markSeen(serie); return false }  // première fois : rien n'est « nouveau »
+        return serie.added > seen
+    }
+    fun markSeen(serie: Item) { if (serie.added > 0) sp.edit().putLong("s_${serie.id}", serie.added).apply() }
+
     /** Retour au thème Mosaïque, écrit tout de suite (appelé quand l'appli plante). */
     fun resetThemeNow() { if (theme != 0) sp.edit().putInt("theme", 0).commit() }
 
@@ -150,15 +161,56 @@ object Prefs {
     // Reprise de lecture (position + durée en ms)
     fun pos(key: String): Long = sp.getLong("p_$key", 0L)
     fun dur(key: String): Long = sp.getLong("d_$key", 0L)
-    fun savePos(key: String, pos: Long, dur: Long) {
+    /** meta : nom, image, extension et série du titre, pour le retrouver dans « Continuer à regarder » (épisodes compris). */
+    fun savePos(key: String, pos: Long, dur: Long, meta: String? = null) {
         if (key.contains(":rp_")) return  // replays : ne prennent pas la place des films en cours
         if (dur > 0 && (pos < 30_000 || pos > dur - 90_000)) clearPos(key)
         else {
-            sp.edit().putLong("p_$key", pos).putLong("d_$key", dur).putLong("t_$key", System.currentTimeMillis()).apply()
+            val e = sp.edit().putLong("p_$key", pos).putLong("d_$key", dur).putLong("t_$key", System.currentTimeMillis())
+            if (meta != null) e.putString("m_$key", meta)
+            e.apply()
             resumeKeys().drop(100).forEach { clearPos(it) }
         }
     }
-    fun clearPos(key: String) = sp.edit().remove("p_$key").remove("d_$key").remove("t_$key").apply()
+    fun clearPos(key: String) = sp.edit().remove("p_$key").remove("d_$key").remove("t_$key").remove("m_$key").apply()
+    fun meta(key: String): String? = sp.getString("m_$key", null)
+
+    /* ---------- Sauvegarde (Ma liste, reprises, réglages ; jamais les codes de l'abonnement) ---------- */
+
+    private val accountKeys = setOf("mode", "server", "user", "pass", "m3u", "origin", "announced")
+
+    fun export(): String {
+        val o = org.json.JSONObject()
+        sp.all.forEach { (k, v) ->
+            if (k in accountKeys) return@forEach
+            when (v) {
+                is String -> o.put("s:$k", v); is Int -> o.put("i:$k", v); is Long -> o.put("l:$k", v)
+                is Boolean -> o.put("b:$k", v); is Float -> o.put("f:$k", v.toDouble())
+                is Set<*> -> o.put("set:$k", org.json.JSONArray(v.toList()))
+            }
+        }
+        return o.put("fkplayer", 1).toString()
+    }
+
+    /** Restaure une sauvegarde ; renvoie le nombre de réglages repris (exception si ce n'est pas une sauvegarde FK PLAYER). */
+    fun import(text: String): Int {
+        val o = org.json.JSONObject(text)
+        if (!o.has("fkplayer")) throw IllegalArgumentException("ce fichier n'est pas une sauvegarde FK PLAYER")
+        val e = sp.edit(); var n = 0
+        o.keys().forEach { tk ->
+            val t = tk.substringBefore(':', ""); val k = tk.substringAfter(':')
+            if (t.isEmpty() || k in accountKeys) return@forEach
+            when (t) {
+                "s" -> e.putString(k, o.getString(tk)); "i" -> e.putInt(k, o.getInt(tk)); "l" -> e.putLong(k, o.getLong(tk))
+                "b" -> e.putBoolean(k, o.getBoolean(tk)); "f" -> e.putFloat(k, o.getDouble(tk).toFloat())
+                "set" -> { val a = o.getJSONArray(tk); e.putStringSet(k, (0 until a.length()).map { a.getString(it) }.toSet()) }
+                else -> return@forEach
+            }
+            n++
+        }
+        e.commit()
+        return n
+    }
     fun progress(key: String): Int {
         val d = dur(key); return if (d > 0) ((pos(key) * 1000) / d).toInt() else 0
     }

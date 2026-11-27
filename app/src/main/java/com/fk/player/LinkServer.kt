@@ -20,7 +20,11 @@ import kotlin.concurrent.thread
  * La TV ouvre un mini serveur sur le Wi-Fi local ; le QR code mène à une page où l'on saisit ses codes.
  * Un jeton aléatoire dans l'adresse empêche les autres appareils du réseau d'envoyer des codes.
  */
-class LinkServer(private val onReceive: (Map<String, String>) -> Unit) {
+class LinkServer(
+    /** Mode sauvegarde : contenu du fichier que le téléphone peut enregistrer (null = page de connexion). */
+    private val backup: (() -> String)? = null,
+    private val onReceive: (Map<String, String>) -> Unit
+) {
 
     var port = 0; private set
     val token: String = java.security.SecureRandom().let { r -> (1..6).map { "abcdefghjkmnpqrstuvwxyz23456789".let { c -> c[r.nextInt(c.length)] } } }.joinToString("")
@@ -65,27 +69,48 @@ class LinkServer(private val onReceive: (Map<String, String>) -> Unit) {
             if (h.isEmpty()) break
             if (h.lowercase().startsWith("content-length:")) len = h.substringAfter(':').trim().toIntOrNull() ?: 0
         }
+        val out = sock.getOutputStream()
+        // Sauvegarde téléchargée par le téléphone (fichier à garder)
+        if (backup != null && path == "/$token/fkplayer-sauvegarde.json") {
+            val file = backup.invoke().toByteArray(Charsets.UTF_8)
+            out.write(("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${file.size}\r\n" +
+                "Content-Disposition: attachment; filename=\"fkplayer-sauvegarde.json\"\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
+            out.write(file); out.flush(); return
+        }
         val ok = path.trimEnd('/') == "/$token" || path.startsWith("/$token?")
         val html = when {
             !ok -> page("Lien expiré", "<p>Scanne à nouveau le QR code affiché sur la TV.</p>")
             method == "POST" -> {
-                val buf = CharArray(len.coerceIn(0, 8192)); var read = 0
+                // Une sauvegarde (Ma liste + reprises) dépasse vite les 8 Ko d'un formulaire de connexion
+                val buf = CharArray(len.coerceIn(0, if (backup != null) 2_000_000 else 8192)); var read = 0
                 while (read < buf.size) { val r = inp.read(buf, read, buf.size - read); if (r < 0) break; read += r }
                 val form = String(buf, 0, read).split("&").mapNotNull {
                     val k = it.substringBefore("="); val v = it.substringAfter("=", "")
                     if (k.isBlank()) null else URLDecoder.decode(k, "UTF-8") to URLDecoder.decode(v, "UTF-8").trim()
                 }.toMap()
                 onReceive(form)
-                page("C'est envoyé !", "<p class='ok'>Regarde ta TV : FK PLAYER se connecte.</p><p>Tu peux fermer cette page.</p>")
+                if (backup != null) page("C'est envoyé !", "<p class='ok'>Regarde ta TV : Ma liste est restaurée.</p><p>Tu peux fermer cette page.</p>")
+                else page("C'est envoyé !", "<p class='ok'>Regarde ta TV : FK PLAYER se connecte.</p><p>Tu peux fermer cette page.</p>")
             }
+            backup != null -> page("Sauvegarde", backupPage())
             else -> page("Connecter ma TV", FORM)
         }
         val body = html.toByteArray(Charsets.UTF_8)
-        val out = sock.getOutputStream()
         out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\n" +
             "Cache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
         out.write(body); out.flush()
     }
+
+    /** Page du téléphone : enregistrer la sauvegarde de cette TV, ou en envoyer une à cette TV. */
+    private fun backupPage() = """<p>Ma liste, tes reprises de lecture et tes réglages (jamais tes codes d'abonnement).</p>
+<div class="card"><p>Garder une copie sur ce téléphone :</p>
+<a href="/$token/fkplayer-sauvegarde.json" download style="display:block;text-align:center;padding:15px;border-radius:26px;font-weight:800;color:#fff;text-decoration:none;background:linear-gradient(90deg,var(--v),var(--c))">Enregistrer la sauvegarde</a></div>
+<form method="post" class="card" id="f" style="margin-top:14px"><p>Remettre une sauvegarde sur cette TV :</p>
+<input type="file" id="file" accept=".json,application/json" style="color:var(--m)"><input type="hidden" name="backup" id="b">
+<button type="submit">Envoyer à la TV</button></form>
+<script>document.getElementById('f').onsubmit=function(e){e.preventDefault();var f=document.getElementById('file').files[0];
+if(!f){alert('Choisis d\'abord le fichier fkplayer-sauvegarde.json');return}
+var r=new FileReader();r.onload=function(){document.getElementById('b').value=r.result;document.getElementById('f').submit()};r.readAsText(f)}</script>"""
 
     private fun page(title: String, content: String) = """<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>FK PLAYER</title><style>

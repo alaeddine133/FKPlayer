@@ -12,6 +12,8 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
@@ -71,7 +73,18 @@ object FkPlayer {
         val sources = DefaultMediaSourceFactory(ds, extractors)
             .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8))
 
-        val renderers = DefaultRenderersFactory(ctx)
+        // Synchro du son : l'horloge du son (qui cadence l'image) est décalée du réglage choisi, lu à chaque instant
+        val renderers = object : DefaultRenderersFactory(ctx) {
+            override fun buildAudioSink(c: Context, float: Boolean, params: Boolean): AudioSink? {
+                val sink = super.buildAudioSink(c, float, params) ?: return null
+                return object : ForwardingAudioSink(sink) {
+                    override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
+                        val p = super.getCurrentPositionUs(sourceEnded)
+                        return if (p == AudioSink.CURRENT_POSITION_NOT_SET) p else (p + Prefs.audioDelay * 1000L).coerceAtLeast(0)
+                    }
+                }
+            }
+        }
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 

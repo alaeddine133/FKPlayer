@@ -67,8 +67,37 @@ class SearchActivity : BaseActivity() {
                 pending = Runnable { run() }.also { ui.postDelayed(it, 350) }
             }
         })
-        query.requestFocus()
+        findViewById<View>(R.id.voice).setOnClickListener { listen() }
+        // Ouvert depuis la touche Recherche / micro de la télécommande : on écoute tout de suite
+        if (intent.getBooleanExtra("voice", false)) listen() else query.requestFocus()
     }
+
+    /** Recherche vocale : la box transforme la parole en texte, qui remplit la recherche. */
+    private fun listen() {
+        val i = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Dis le nom d'un film, d'une série ou d'une chaîne")
+        try { @Suppress("DEPRECATION") startActivityForResult(i, VOICE) }
+        catch (e: Exception) { toast("La recherche vocale n'est pas disponible sur cette box : utilise le clavier"); query.requestFocus() }
+    }
+
+    @Deprecated("API Android standard")
+    override fun onActivityResult(req: Int, res: Int, data: android.content.Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(req, res, data)
+        if (req != VOICE || res != RESULT_OK) return
+        val said = data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
+        focusResults = true
+        query.setText(said); query.setSelection(said.length)
+    }
+
+    private var focusResults = false  // après une recherche vocale, le focus va directement sur le premier résultat
+
+    /** Touche Recherche de la télécommande sur cet écran : on écoute. */
+    override fun onKeyDown(code: Int, e: android.view.KeyEvent): Boolean =
+        if (code == android.view.KeyEvent.KEYCODE_SEARCH) { listen(); true } else super.onKeyDown(code, e)
+
+    private companion object { const val VOICE = 7 }
 
     private fun run() {
         val q = query.text.toString(); val t = types.toSet()
@@ -77,6 +106,11 @@ class SearchActivity : BaseActivity() {
             val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Repo.search(q, t) }
             if (query.text.toString() != q) return@launch  // une frappe plus récente arrive
             ad.items = res
+            if (focusResults && res.isNotEmpty()) {
+                focusResults = false
+                val grid = findViewById<RecyclerView>(R.id.grid)
+                grid.post { grid.getChildAt(0)?.findViewById<View>(R.id.card)?.requestFocus() }
+            }
             empty.visibility = if (res.isEmpty()) View.VISIBLE else View.GONE
             empty.text = if (q.trim().length < 2) "Tape au moins 2 lettres" else "Aucun résultat pour « ${q.trim()} »"
         }

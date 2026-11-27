@@ -59,7 +59,18 @@ class PlayerActivity : BaseActivity() {
 
     private val hide = Runnable { showOverlay(false) }
     private val ticker = object : Runnable {
-        override fun run() { updateProgress(); ui.postDelayed(this, 1000) }
+        override fun run() {
+            // Minuterie de mise en veille : on coupe la vidéo et on revient à l'écran précédent
+            if (sleepAt in 1..System.currentTimeMillis()) { sleepAt = 0; player?.pause(); toast("Mise en veille : lecture arrêtée"); finish(); return }
+            updateProgress(); ui.postDelayed(this, 1000)
+        }
+    }
+
+    companion object {
+        /** Heure d'arrêt programmée (0 = pas de minuterie) ; gardée en changeant de chaîne ou de film. */
+        var sleepAt = 0L
+        private val sleepMinutes = intArrayOf(0, 30, 60, 90, 120)
+        private val delays = intArrayOf(-500, -300, -200, -100, 0, 100, 200, 300, 500)
     }
     private val zapGo = Runnable { goToNumber() }
 
@@ -256,7 +267,7 @@ class PlayerActivity : BaseActivity() {
         val p = player ?: return
         if (isLive) return
         val d = p.duration
-        if (d > 0 && d != C.TIME_UNSET) Prefs.savePos(cur.key, p.currentPosition, d)
+        if (d > 0 && d != C.TIME_UNSET) Prefs.savePos(cur.key, p.currentPosition, d, Resume.meta(cur, PlayQueue.seriesName))
     }
 
     /* ---------- Événements du lecteur ---------- */
@@ -677,7 +688,9 @@ class PlayerActivity : BaseActivity() {
             "Format d'image : ${FkPlayer.resizeNames[Prefs.resize]}",
             if (fav) "Retirer de Ma liste" else "Ajouter à Ma liste",
             "Relancer le flux",
-            "Infos du flux"
+            "Infos du flux",
+            "Mise en veille : " + if (sleepAt > 0) "dans ${((sleepAt - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)} min" else "désactivée",
+            "Synchro du son : " + delayLabel(Prefs.audioDelay)
         )
         AlertDialog.Builder(this).setTitle(cur.name).setItems(opts) { _, w ->
             when (w) {
@@ -687,8 +700,31 @@ class PlayerActivity : BaseActivity() {
                 3 -> toast(if (Prefs.toggleFav(cur.key)) "Ajouté à Ma liste" else "Retiré de Ma liste")
                 4 -> { savePosition(); load(resume = true) }
                 5 -> streamInfo(p)
+                6 -> sleepTimer()
+                7 -> audioSync()
             }
         }.show()
+    }
+
+    private fun sleepTimer() {
+        val labels = sleepMinutes.map { if (it == 0) "Désactivée" else if (it < 60) "Dans $it min" else "Dans ${it / 60} h" + if (it % 60 > 0) " ${it % 60}" else "" }
+        AlertDialog.Builder(this).setTitle("Mise en veille").setItems(labels.toTypedArray()) { _, w ->
+            val m = sleepMinutes[w]
+            sleepAt = if (m == 0) 0 else System.currentTimeMillis() + m * 60_000L
+            status(if (m == 0) "Mise en veille désactivée" else "Arrêt de la lecture ${labels[w].lowercase()}", 2000)
+        }.show()
+    }
+
+    private fun delayLabel(ms: Int) = when { ms == 0 -> "normale"; ms < 0 -> "image retardée de ${-ms} ms"; else -> "image avancée de $ms ms" }
+
+    /** La voix arrive après les lèvres → retarder l'image (valeur négative), et l'inverse. Appliqué tout de suite. */
+    private fun audioSync() {
+        val cur = delays.indexOf(Prefs.audioDelay).coerceAtLeast(0)
+        AlertDialog.Builder(this).setTitle("Synchro du son")
+            .setSingleChoiceItems(delays.map { delayLabel(it).replaceFirstChar { c -> c.uppercase() } }.toTypedArray(), cur) { d, w ->
+                Prefs.audioDelay = delays[w]; d.dismiss()
+                status("Synchro du son : ${delayLabel(delays[w])}", 2000)
+            }.show()
     }
 
     private fun tracks(type: Int) {

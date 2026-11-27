@@ -466,5 +466,26 @@
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>
+
+        <!-- Continuer à regarder : caché tant que rien n'est commencé -->
+        <TextView
+            android:id="@+id/resumeTitle"
+            style="@style/H1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Continuer à regarder"
+            android:textSize="15sp"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/resumeRow"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:layout_marginTop="4dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:scrollbars="none"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

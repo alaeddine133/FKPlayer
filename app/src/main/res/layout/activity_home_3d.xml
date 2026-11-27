@@ -271,6 +271,28 @@
             </LinearLayout>
         </HorizontalScrollView>
 
+        <!-- Continuer à regarder : caché tant que rien n'est commencé -->
+        <TextView
+            android:id="@+id/resumeTitle"
+            style="@style/H1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="44dp"
+            android:text="Continuer à regarder"
+            android:textSize="15sp"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/resumeRow"
+            android:layout_width="match_parent"
+            android:layout_height="190dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingLeft="38dp"
+            android:paddingRight="38dp"
+            android:scrollbars="none"
+            android:visibility="gone" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

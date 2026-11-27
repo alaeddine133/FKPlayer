@@ -176,6 +176,14 @@ open class BaseActivity : AppCompatActivity() {
     override fun onPause() { super.onPause(); ui.removeCallbacks(tick) }
     override fun onDestroy() { super.onDestroy(); ui.removeCallbacksAndMessages(null) }
 
+    /** Touche Recherche / micro de la télécommande : recherche vocale depuis n'importe quel écran (hors lecture). */
+    override fun onKeyDown(code: Int, e: android.view.KeyEvent): Boolean {
+        if (code == android.view.KeyEvent.KEYCODE_SEARCH && Repo.loaded && this !is PlayerActivity && this !is LoginActivity) {
+            startActivity(Intent(this, SearchActivity::class.java).putExtra("voice", true)); return true
+        }
+        return super.onKeyDown(code, e)
+    }
+
     /** Si l'appli a été fermée par le système, on recharge les listes depuis l'écran de démarrage. */
     fun needData(): Boolean {
         if (Repo.loaded) return false

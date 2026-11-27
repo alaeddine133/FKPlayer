@@ -63,6 +63,7 @@ class SettingsActivity : BaseActivity() {
             },
             if (!Repo.isXtream) null else Row("Adresses de secours du serveur", "Si le serveur ne répond plus, FK PLAYER essaie ces adresses toute seule",
                 { Repo.candidates("", "", Prefs.backups).size.let { if (it == 0) "Aucune" else "$it adresse" + (if (it > 1) "s" else "") } }) { editBackups() },
+            Row("Sauvegarde de Ma liste", "Garder une copie sur ton téléphone, ou la remettre sur une nouvelle box", { "QR code" }) { backupDialog() },
             Row("Mise à jour de l'appli", "FK PLAYER vérifie aussi tout seul à chaque démarrage", { "Rechercher" }) { Updater.check(this, manual = true) },
             Row("Actualiser les listes", "Recharge chaînes, films et séries depuis le serveur", { "Actualiser" }) { reload() },
             Row("Changer de compte", "Se déconnecter et saisir un autre abonnement", { "Déconnexion" }) { logout() }
@@ -103,6 +104,42 @@ class SettingsActivity : BaseActivity() {
             }
         }
     }
+
+    /* ---------- Sauvegarde de Ma liste (par le téléphone, sur le même Wi-Fi) ---------- */
+
+    private var link: LinkServer? = null
+    private var backupDlg: AlertDialog? = null
+
+    private fun backupDialog() {
+        val l = LinkServer(backup = { Prefs.export() }) { data -> runOnUiThread { restore(data["backup"]) } }
+        if (!l.start()) { toast("Impossible d'ouvrir la sauvegarde sur le Wi-Fi"); return }
+        val url = l.url() ?: run { l.stop(); toast("La box n'est pas connectée au Wi-Fi"); return }
+        link = l
+        val qr = android.widget.ImageView(this).apply {
+            setImageBitmap(LinkServer.qr(url, dp(240)))
+            setPadding(0, dp(12), 0, dp(4))
+        }
+        backupDlg = AlertDialog.Builder(this)
+            .setTitle("Sauvegarde de Ma liste")
+            .setMessage("Scanne ce QR code avec ton téléphone (même Wi-Fi que la box) pour enregistrer la sauvegarde ou en remettre une.\n$url")
+            .setView(qr)
+            .setNegativeButton("Fermer", null)
+            .setOnDismissListener { l.stop(); link = null }
+            .showTv(android.content.DialogInterface.BUTTON_NEGATIVE)
+    }
+
+    private fun restore(text: String?) {
+        try {
+            val n = Prefs.import(text ?: "")
+            toast("Sauvegarde remise : $n éléments")
+            backupDlg?.dismiss()
+            // Accueil redessiné : Ma liste, reprises et thème restaurés
+            startActivity(Intent(this, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            finish()
+        } catch (e: Exception) { toast("Fichier refusé : ${e.message}") }
+    }
+
+    override fun onDestroy() { link?.stop(); super.onDestroy() }
 
     private fun editBackups() {
         val box = android.widget.EditText(this).apply {

@@ -29,6 +29,7 @@ class SeriesActivity : BaseActivity() {
         val id = intent.getStringExtra("id") ?: run { finish(); return }
         serie = Repo.series.firstOrNull { it.id == id } ?: run { finish(); return }
         cover = serie.icon
+        Prefs.markSeen(serie)  // les nouveaux épisodes sont vus : le badge « Nouveau » disparaît
 
         findViewById<TextView>(R.id.title).text = serie.name
         findViewById<TextView>(R.id.meta).text = serie.rating?.let { "★ $it" } ?: ""
